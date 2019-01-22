@@ -1,0 +1,9 @@
+task_scheduler:
+  restart: unless-stopped
+  image: task_scheduler_image
+  volumes:
+    - /var/log/supervisor/:/var/log/supervisor/
+    - /opt/ops_scripts:/opt/ops_scripts
+    - /sys/fs/cgroup:/sys/fs/cgroup
+  ports:
+    - "8020:80"
