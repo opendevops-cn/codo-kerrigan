@@ -8,10 +8,12 @@ Desc    : api
 """
 import json
 from libs.base_handler import BaseHandler
-from models.models import KerriganProject, KerriganConfig, KerriganHistory, KerriganPublish, model_to_dict
+from models.models import KerriganProject, KerriganConfig, KerriganHistory, KerriganPublish, KerriganPermissions, \
+    model_to_dict
 from sqlalchemy import or_
 from websdk.db_context import DBContext
 import difflib
+
 
 def check_contain_chinese(check_str):
     for ch in check_str:
@@ -20,10 +22,25 @@ def check_contain_chinese(check_str):
     return False
 
 
+def check_permissions(nickname):
+    the_project_list = []
+    the_pro_env_list = []
+    with DBContext('r') as session:
+        the_project = session.query(KerriganPermissions).filter(KerriganPermissions.nickname == nickname).all()
+
+    for msg in the_project:
+        data_dict = model_to_dict(msg)
+        the_project_list.append(data_dict['project_code'])
+        the_pro_env_list.append("{}/{}".format(data_dict['project_code'], data_dict['environment']))
+    return the_pro_env_list
+
+
 class ProjectHandler(BaseHandler):
     def get(self, *args, **kwargs):
         key = self.get_argument('key', default=None, strip=True)
+        nickname = self.get_current_nickname()
         project_list = []
+        the_project_list = []
         with DBContext('r') as session:
             if key:
                 project_info = session.query(KerriganProject).filter(
@@ -31,11 +48,21 @@ class ProjectHandler(BaseHandler):
                         KerriganProject.project_code.like('%{}%'.format(key)))).all()
             else:
                 project_info = session.query(KerriganProject).all()
+            the_project = session.query(KerriganPermissions).filter(KerriganPermissions.nickname == nickname).all()
+
+        for msg in the_project:
+            data_dict = model_to_dict(msg)
+            the_project_list.append(data_dict['project_code'])
 
         for msg in project_info:
             data_dict = model_to_dict(msg)
             data_dict['create_time'] = str(data_dict['create_time'])
-            project_list.append(data_dict)
+
+            if not self.is_superuser:
+                if data_dict['project_code'] in the_project_list:
+                    project_list.append(data_dict)
+            else:
+                project_list.append(data_dict)
 
         self.write(dict(code=0, msg='获取成功', data=project_list))
 
@@ -53,7 +80,8 @@ class ProjectHandler(BaseHandler):
         nickname = self.get_current_nickname()
         with DBContext('w', None, True) as session:
             is_exist = session.query(KerriganProject.project_id).filter(
-                KerriganConfig.project_code == project_code).first()
+                KerriganProject.project_code == project_code).first()
+
             if is_exist:
                 return self.write(dict(code=-2, msg='名称不能重复'))
 
@@ -65,24 +93,32 @@ class ProjectHandler(BaseHandler):
 class ProjectTreeHandler(BaseHandler):
     def get(self, *args, **kwargs):
         project_code = self.get_argument('project_code', default=None, strip=True)
+        nickname = self.get_current_nickname()
         if not project_code:
             return self.write(dict(code=-1, msg='关键参数不能为空'))
 
         config_list = []
+
         with DBContext('r') as session:
             config_info = session.query(KerriganConfig).filter(KerriganConfig.project_code == project_code,
                                                                KerriganConfig.is_deleted == False).all()
             project_info = session.query(KerriganProject.project_name).filter(
                 KerriganConfig.project_code == project_code).first()
 
-            if not project_info:
-                project_name = project_code
-            else:
-                project_name = project_info[0]
+        the_pro_env_list= check_permissions(nickname)
 
-            for m in config_info:
-                data_dict = model_to_dict(m)
-                data_dict.pop('create_time')
+        if not project_info:
+            project_name = project_code
+        else:
+            project_name = project_info[0]
+
+        for m in config_info:
+            data_dict = model_to_dict(m)
+            data_dict.pop('create_time')
+            if  not self.is_superuser:
+                if "{}/{}".format(data_dict['project_code'],data_dict['environment']) in the_pro_env_list:
+                    config_list.append(data_dict)
+            else:
                 config_list.append(data_dict)
 
         _tree = [{"expand": True, "title": project_code, "children": [],
@@ -143,19 +179,25 @@ class ConfigurationHandler(BaseHandler):
         if not project_code or not environment or not service or not filename:
             return self.write(dict(code=-1, msg='关键参数不能为空'))
 
+        the_pro_env_list = check_permissions(self.get_current_nickname())
+        if not self.is_superuser:
+            if "{}/{}".format(project_code, environment) in the_pro_env_list:
+                return self.write(dict(code=-2, msg='没有权限', data=dict(content='')))
+
         with DBContext('r') as session:
             if not publish:
                 conf_info = session.query(KerriganConfig).filter(KerriganConfig.project_code == project_code,
-                                                                         KerriganConfig.environment == environment,
-                                                                         KerriganConfig.service == service,
-                                                                         KerriganConfig.filename == filename,
-                                                                         KerriganConfig.is_deleted == False).first()
-                return self.write(dict(code=0, msg='获取成功', data=dict(content=conf_info.content,is_published=conf_info.is_published)))
+                                                                 KerriganConfig.environment == environment,
+                                                                 KerriganConfig.service == service,
+                                                                 KerriganConfig.filename == filename,
+                                                                 KerriganConfig.is_deleted == False).first()
+                return self.write(
+                    dict(code=0, msg='获取成功', data=dict(content=conf_info.content, is_published=conf_info.is_published)))
             else:
                 config_key = "/{}/{}/{}/{}".format(project_code, environment, service, filename)
                 conf_info = session.query(KerriganPublish).filter(KerriganPublish.config == config_key).first()
         if not conf_info:
-            return self.write(dict(code=-2, msg='没有数据', data=dict(content='')))
+            return self.write(dict(code=-3, msg='没有数据', data=dict(content='')))
 
         self.write(dict(code=0, msg='获取成功', data=dict(content=conf_info.content)))
 
@@ -169,6 +211,12 @@ class ConfigurationHandler(BaseHandler):
         content = data.get('content')
         if not project_code or not environment or not service or not filename:
             return self.write(dict(code=-1, msg='关键参数不能为空'))
+
+        ### 鉴权
+        the_pro_env_list = check_permissions(self.get_current_nickname())
+        if not self.is_superuser:
+            if "{}/{}".format(project_code, environment) in the_pro_env_list:
+                return self.write(dict(code=-2, msg='没有权限', data=dict(content='')))
 
         with DBContext('r') as session:
             is_exist = session.query(KerriganConfig.id).filter(KerriganConfig.project_code == project_code,
@@ -207,6 +255,12 @@ class ConfigurationHandler(BaseHandler):
         if not project_code or not environment or not service or not filename:
             return self.write(dict(code=-1, msg='关键参数不能为空'))
 
+        ### 鉴权
+        the_pro_env_list = check_permissions(self.get_current_nickname())
+        if not self.is_superuser:
+            if "{}/{}".format(project_code, environment) in the_pro_env_list:
+                return self.write(dict(code=-2, msg='没有权限', data=dict(content='')))
+
         with DBContext('w', None, True) as session:
             session.query(KerriganConfig).filter(KerriganConfig.project_code == project_code,
                                                  KerriganConfig.environment == environment,
@@ -214,8 +268,8 @@ class ConfigurationHandler(BaseHandler):
                                                  KerriganConfig.filename == filename,
                                                  KerriganConfig.is_deleted == False).update(
                 {KerriganConfig.content: content, KerriganConfig.is_published: False,
-                 #KerriganConfig.create_user: self.get_current_nickname()})
-                 KerriganConfig.create_user: 'yangmv'})
+                 KerriganConfig.create_user: self.get_current_nickname()})
+            # KerriganConfig.create_user: 'yangmv'})
 
         self.write(dict(code=0, msg='配置修改成功'))
 
@@ -228,6 +282,12 @@ class ConfigurationHandler(BaseHandler):
         filename = data.get('filename')
         if not project_code or not environment or not service or not filename:
             return self.write(dict(code=-1, msg='关键参数不能为空'))
+
+        ### 鉴权
+        the_pro_env_list = check_permissions(self.get_current_nickname())
+        if not self.is_superuser:
+            if "{}/{}".format(project_code, environment) in the_pro_env_list:
+                return self.write(dict(code=-2, msg='没有权限', data=dict(content='')))
 
         with DBContext('w', None, True) as session:
             session.query(KerriganConfig).filter(KerriganConfig.project_code == project_code,
@@ -244,6 +304,7 @@ class ConfigurationHandler(BaseHandler):
         if not config_id:
             return self.write(dict(code=-1, msg='关键参数不能为空'))
 
+
         with DBContext('w', None, True) as session:
             session.query(KerriganConfig).update({KerriganConfig.is_published: True})
             config_info = session.query(KerriganConfig).filter(KerriganConfig.id == config_id).first()
@@ -251,6 +312,13 @@ class ConfigurationHandler(BaseHandler):
             config_key = "/{}/{}/{}/{}".format(config_info.project_code, config_info.environment, config_info.service,
                                                config_info.filename)
             publish = session.query(KerriganPublish.id).filter(KerriganPublish.config == config_key).first()
+
+            ### 鉴权
+            the_pro_env_list = check_permissions(self.get_current_nickname())
+            if not self.is_superuser:
+                if "{}/{}".format(config_info.project_code, config_info.environment) in the_pro_env_list:
+                    return self.write(dict(code=-2, msg='没有权限', data=dict(content='')))
+
             if not publish:
                 session.add(KerriganPublish(config=config_key, content=config_info.content,
                                             create_user=self.get_current_nickname()))
@@ -259,9 +327,8 @@ class ConfigurationHandler(BaseHandler):
                     {KerriganPublish.content: config_info.content,
                      KerriganConfig.create_user: self.get_current_nickname()})
 
-            session.add(KerriganHistory(
-                config=config_key,content=config_info.content,create_user=self.get_current_nickname()
-            ))
+            session.add(KerriganHistory(config=config_key, content=config_info.content,
+                                        create_user=self.get_current_nickname()))
 
         return self.write(dict(code=0, msg='发布成功'))
 
@@ -274,6 +341,12 @@ class HistoryConfigHandler(BaseHandler):
         filename = self.get_argument('filename', default=None, strip=True)
         if not project_code or not environment or not service or not filename:
             return self.write(dict(code=-1, msg='关键参数不能为空'))
+
+        ### 鉴权
+        the_pro_env_list = check_permissions(self.get_current_nickname())
+        if not self.is_superuser:
+            if "{}/{}".format(project_code, environment) in the_pro_env_list:
+                return self.write(dict(code=-2, msg='没有权限', data=dict(content='')))
 
         history_list = []
         config_key = "/{}/{}/{}/{}".format(project_code, environment, service, filename)
@@ -292,6 +365,15 @@ class HistoryConfigHandler(BaseHandler):
 
         with DBContext('r') as session:
             conf_info = session.query(KerriganHistory).filter(KerriganConfig.id == history_id).all()
+
+        project_code, environment = conf_info.config.split('/')[0] ,conf_info.config.split('/')[1]
+
+        ### 鉴权
+        the_pro_env_list = check_permissions(self.get_current_nickname())
+        if not self.is_superuser:
+            if "{}/{}".format(project_code, environment) in the_pro_env_list:
+                return self.write(dict(code=-2, msg='没有权限', data=dict(content='')))
+
 
         with DBContext('w', None, True) as session:
             session.query(KerriganConfig).filter(KerriganConfig.project_code == conf_info.project_code,
@@ -312,12 +394,14 @@ class DiffConfigHandler(BaseHandler):
             config_info = session.query(KerriganConfig).filter(KerriganConfig.id == config_id).first()
             diff_data = config_info.content.splitlines()
 
-        config_key = "/{}/{}/{}/{}".format(config_info.project_code, config_info.environment, config_info.service,config_info.filename)
+        config_key = "/{}/{}/{}/{}".format(config_info.project_code, config_info.environment, config_info.service,
+                                           config_info.filename)
         with DBContext('w', None, True) as session:
             publish_info = session.query(KerriganPublish).filter(KerriganPublish.config == config_key).first()
             src_data = publish_info.content.splitlines()
         html = difflib.HtmlDiff().make_file(src_data, diff_data, context=True, numlines=3)
         return self.write(dict(code=0, msg='对比内容获取成功', data=html))
+
 
 config_urls = [
     (r"/v1/conf/project/", ProjectHandler),

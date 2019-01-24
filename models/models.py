@@ -79,6 +79,7 @@ class KerriganPermissions(Base):
     __tablename__ = 'kerrigan_permissions'
 
     id = Column('id', Integer, primary_key=True, autoincrement=True)
-    project_id = Column('project_id', Integer, nullable=False)  ###
+    project_code = Column('project_code', String(50) ,nullable=False)  ###
+    environment = Column('environment', String(18),nullable=False)
     nickname = Column('nickname', String(120))
     create_time = Column('create_time', DateTime(), default=datetime.now, onupdate=datetime.now)
