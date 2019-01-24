@@ -105,7 +105,7 @@ class ProjectTreeHandler(BaseHandler):
             project_info = session.query(KerriganProject.project_name).filter(
                 KerriganConfig.project_code == project_code).first()
 
-        the_pro_env_list= check_permissions(nickname)
+        the_pro_env_list = check_permissions(nickname)
 
         if not project_info:
             project_name = project_code
@@ -115,8 +115,8 @@ class ProjectTreeHandler(BaseHandler):
         for m in config_info:
             data_dict = model_to_dict(m)
             data_dict.pop('create_time')
-            if  not self.is_superuser:
-                if "{}/{}".format(data_dict['project_code'],data_dict['environment']) in the_pro_env_list:
+            if not self.is_superuser:
+                if "{}/{}".format(data_dict['project_code'], data_dict['environment']) in the_pro_env_list:
                     config_list.append(data_dict)
             else:
                 config_list.append(data_dict)
@@ -304,7 +304,6 @@ class ConfigurationHandler(BaseHandler):
         if not config_id:
             return self.write(dict(code=-1, msg='关键参数不能为空'))
 
-
         with DBContext('w', None, True) as session:
             session.query(KerriganConfig).update({KerriganConfig.is_published: True})
             config_info = session.query(KerriganConfig).filter(KerriganConfig.id == config_id).first()
@@ -366,14 +365,13 @@ class HistoryConfigHandler(BaseHandler):
         with DBContext('r') as session:
             conf_info = session.query(KerriganHistory).filter(KerriganConfig.id == history_id).all()
 
-        project_code, environment = conf_info.config.split('/')[0] ,conf_info.config.split('/')[1]
+        project_code, environment = conf_info.config.split('/')[0], conf_info.config.split('/')[1]
 
         ### 鉴权
         the_pro_env_list = check_permissions(self.get_current_nickname())
         if not self.is_superuser:
             if "{}/{}".format(project_code, environment) in the_pro_env_list:
                 return self.write(dict(code=-2, msg='没有权限', data=dict(content='')))
-
 
         with DBContext('w', None, True) as session:
             session.query(KerriganConfig).filter(KerriganConfig.project_code == conf_info.project_code,
@@ -396,11 +394,41 @@ class DiffConfigHandler(BaseHandler):
 
         config_key = "/{}/{}/{}/{}".format(config_info.project_code, config_info.environment, config_info.service,
                                            config_info.filename)
-        with DBContext('w', None, True) as session:
+        with DBContext('r') as session:
             publish_info = session.query(KerriganPublish).filter(KerriganPublish.config == config_key).first()
             src_data = publish_info.content.splitlines()
         html = difflib.HtmlDiff().make_file(src_data, diff_data, context=True, numlines=3)
         return self.write(dict(code=0, msg='对比内容获取成功', data=html))
+
+
+class PermissionsHandler(BaseHandler):
+    def get(self, *args, **kwargs):
+        project_code = self.get_argument('project_code', default=None, strip=True)
+        environment = self.get_argument('environment', default=None, strip=True)
+        user_list = []
+
+        if not project_code or not environment:
+            return self.write(dict(code=-1, msg='关键参数不能为空'))
+
+        with DBContext('r') as session:
+            user_info = session.query(KerriganPermissions.nickname).filter(
+                KerriganPermissions.project_code == project_code,
+                KerriganPermissions.environment == environment).all()
+
+        for u in user_info:
+            user_list.append(u[0])
+
+        return self.write(dict(code=0, msg='获取成功', data=user_info))
+
+    def post(self, *args, **kwargs):
+        pass
+
+
+    def put(self, *args, **kwargs):
+        pass
+
+    def delete(self, *args, **kwargs):
+        pass
 
 
 config_urls = [
@@ -408,7 +436,8 @@ config_urls = [
     (r"/v1/conf/config/", ConfigurationHandler),
     (r"/v1/conf/tree/", ProjectTreeHandler),
     (r"/v1/conf/history/", HistoryConfigHandler),
-    (r"/v1/conf/diff/", DiffConfigHandler)
+    (r"/v1/conf/diff/", DiffConfigHandler),
+    (r"/v1/conf/permissions/", PermissionsHandler)
 ]
 if __name__ == "__main__":
     pass
