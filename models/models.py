@@ -28,7 +28,7 @@ class KerriganProject(Base):
     ### 项目表
     project_id = Column('project_id', Integer, primary_key=True, autoincrement=True)
 
-    project_code = Column('project_code', String(50))
+    project_code = Column('project_code', String(50) ,unique=True ,nullable=False)
     project_name = Column('project_name', String(150))
 
     create_user = Column('create_user', String(100))

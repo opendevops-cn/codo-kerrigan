@@ -11,7 +11,7 @@ from libs.base_handler import BaseHandler
 from models.models import KerriganProject, KerriganConfig, KerriganHistory, KerriganPublish, model_to_dict
 from sqlalchemy import or_
 from websdk.db_context import DBContext
-
+import difflib
 
 def check_contain_chinese(check_str):
     for ch in check_str:
@@ -85,7 +85,7 @@ class ProjectTreeHandler(BaseHandler):
                 data_dict.pop('create_time')
                 config_list.append(data_dict)
 
-        _tree = [{"open": True, "name": project_code, "children": [],
+        _tree = [{"expand": True, "title": project_code, "children": [],
                   "display_name": "%s | %s" % (project_code, project_name)}]
 
         if config_list:
@@ -100,20 +100,22 @@ class ProjectTreeHandler(BaseHandler):
 
                 # 因为是第一层所以没有parent
                 tmp_tree["environ"][environ] = {
-                    "open": True, "name": environ, "parent": "root", "children": []
+                    "expand": True, "title": environ, "parent": "root", "children": []
                 }
 
                 # 父节点是对应的environ
                 tmp_tree["service"][environ + "|" + service] = {
-                    "open": True, "name": service, "parent": environ,
+                    "expand": True, "title": service, "parent": environ,
                     "children": []
                 }
 
                 # 最后一层没有children
                 tmp_tree["filename"][environ + "|" + service + "|" + filename] = {
-                    "open": True, "id": t['id'],
-                    "name": filename,
-                    "parent": environ + "|" + service
+                    "expand": True, "id": t['id'],
+                    "title": filename,
+                    "parent": environ + "|" + service,
+                    "env": environ,
+                    "service": service
                 }
 
             for tmpFilename in tmp_tree["filename"].values():
@@ -142,25 +144,24 @@ class ConfigurationHandler(BaseHandler):
             return self.write(dict(code=-1, msg='关键参数不能为空'))
 
         with DBContext('r') as session:
-            if publish:
-                conf_info = session.query(KerriganConfig.content).filter(KerriganConfig.project_code == project_code,
+            if not publish:
+                conf_info = session.query(KerriganConfig).filter(KerriganConfig.project_code == project_code,
                                                                          KerriganConfig.environment == environment,
                                                                          KerriganConfig.service == service,
                                                                          KerriganConfig.filename == filename,
-                                                                         KerriganConfig.is_deleted == False,
-                                                                         KerriganConfig.is_published == True).first()
+                                                                         KerriganConfig.is_deleted == False).first()
+                return self.write(dict(code=0, msg='获取成功', data=dict(content=conf_info.content,is_published=conf_info.is_published)))
             else:
                 config_key = "/{}/{}/{}/{}".format(project_code, environment, service, filename)
-                conf_info = session.query(KerriganPublish.content).filter(KerriganPublish.config == config_key).first()
+                conf_info = session.query(KerriganPublish).filter(KerriganPublish.config == config_key).first()
         if not conf_info:
             return self.write(dict(code=-2, msg='没有数据', data=dict(content='')))
 
-        self.write(dict(code=0, msg='获取成功', data=dict(content=conf_info[0])))
+        self.write(dict(code=0, msg='获取成功', data=dict(content=conf_info.content)))
 
     ### 添加
     def post(self, *args, **kwargs):
         data = json.loads(self.request.body.decode("utf-8"))
-        project_id = data.get('project_id')
         project_code = data.get('project_code')
         environment = data.get('environment')
         service = data.get('service')
@@ -187,7 +188,7 @@ class ConfigurationHandler(BaseHandler):
                                                  ).update({KerriganConfig.is_deleted: True})
 
             session.add(
-                KerriganConfig(pid=project_id, project_code=project_code, environment=environment, service=service,
+                KerriganConfig(project_code=project_code, environment=environment, service=service,
                                filename=filename, content=content, create_user=self.get_current_nickname()))
 
             ### 历史记录
@@ -213,7 +214,8 @@ class ConfigurationHandler(BaseHandler):
                                                  KerriganConfig.filename == filename,
                                                  KerriganConfig.is_deleted == False).update(
                 {KerriganConfig.content: content, KerriganConfig.is_published: False,
-                 KerriganConfig.create_user: self.get_current_nickname()})
+                 #KerriganConfig.create_user: self.get_current_nickname()})
+                 KerriganConfig.create_user: 'yangmv'})
 
         self.write(dict(code=0, msg='配置修改成功'))
 
@@ -257,6 +259,10 @@ class ConfigurationHandler(BaseHandler):
                     {KerriganPublish.content: config_info.content,
                      KerriganConfig.create_user: self.get_current_nickname()})
 
+            session.add(KerriganHistory(
+                config=config_key,content=config_info.content,create_user=self.get_current_nickname()
+            ))
+
         return self.write(dict(code=0, msg='发布成功'))
 
 
@@ -272,7 +278,7 @@ class HistoryConfigHandler(BaseHandler):
         history_list = []
         config_key = "/{}/{}/{}/{}".format(project_code, environment, service, filename)
         with DBContext('r') as session:
-            conf_info = session.query(KerriganHistory.content).filter(KerriganConfig.config == config_key).all()
+            conf_info = session.query(KerriganHistory).filter(KerriganHistory.config == config_key).all()
 
         for msg in conf_info:
             data_dict = model_to_dict(msg)
@@ -297,11 +303,28 @@ class HistoryConfigHandler(BaseHandler):
                  KerriganConfig.create_user: self.get_current_nickname()})
 
 
+class DiffConfigHandler(BaseHandler):
+    def get(self, *args, **kwargs):
+        config_id = self.get_argument('config_id', default=None, strip=True)
+        if not config_id:
+            return self.write(dict(code=-1, msg='关键参数不能为空'))
+        with DBContext('r') as session:
+            config_info = session.query(KerriganConfig).filter(KerriganConfig.id == config_id).first()
+            diff_data = config_info.content.splitlines()
+
+        config_key = "/{}/{}/{}/{}".format(config_info.project_code, config_info.environment, config_info.service,config_info.filename)
+        with DBContext('w', None, True) as session:
+            publish_info = session.query(KerriganPublish).filter(KerriganPublish.config == config_key).first()
+            src_data = publish_info.content.splitlines()
+        html = difflib.HtmlDiff().make_file(src_data, diff_data, context=True, numlines=3)
+        return self.write(dict(code=0, msg='对比内容获取成功', data=html))
+
 config_urls = [
     (r"/v1/conf/project/", ProjectHandler),
     (r"/v1/conf/config/", ConfigurationHandler),
     (r"/v1/conf/tree/", ProjectTreeHandler),
-    (r"/v1/conf/history/", HistoryConfigHandler)
+    (r"/v1/conf/history/", HistoryConfigHandler),
+    (r"/v1/conf/diff/", DiffConfigHandler)
 ]
 if __name__ == "__main__":
     pass
