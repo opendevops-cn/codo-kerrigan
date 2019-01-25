@@ -26,7 +26,7 @@ def check_permissions(nickname):
     the_project_list = []
     the_pro_env_list = []
     is_admin = False
-    the_permission_dict = {}
+    the_pro_per_dict = {}
     with DBContext('r') as session:
         the_project = session.query(KerriganPermissions).filter(KerriganPermissions.nickname == nickname).all()
 
@@ -35,10 +35,8 @@ def check_permissions(nickname):
         the_project_list.append(data_dict['project_code'])
         the_pro_env_list.append("{}/{}".format(data_dict['project_code'], data_dict['environment']))
         is_admin = data_dict['is_admin'] if data_dict['is_admin'] else is_admin
-        the_permission_dict[data_dict['project_code']] = data_dict['is_admin']
-    print(the_pro_env_list)
-    print(the_permission_dict)
-    return the_pro_env_list
+        the_pro_per_dict[data_dict['project_code']] = data_dict['is_admin']
+    return the_pro_env_list, the_pro_per_dict
 
 
 class ProjectHandler(BaseHandler):
@@ -55,11 +53,9 @@ class ProjectHandler(BaseHandler):
             else:
                 project_info = session.query(KerriganProject).all()
 
-        the_pro_env_list = check_permissions(self.get_current_nickname())
+        the_pro_env_list, the_pro_per_dict = check_permissions(nickname)
         for p in the_pro_env_list:
             the_project_list.append(p.split('/')[0])
-
-        print(the_project_list)
 
         for msg in project_info:
             data_dict = model_to_dict(msg)
@@ -123,7 +119,7 @@ class ProjectTreeHandler(BaseHandler):
             data_dict = model_to_dict(m)
             data_dict.pop('create_time')
             if not self.is_superuser:
-                if "{}/{}".format(data_dict['project_code'], data_dict['environment']) in  the_pro_env_list:
+                if "{}/{}".format(data_dict['project_code'], data_dict['environment']) in the_pro_env_list:
                     config_list.append(data_dict)
             else:
                 config_list.append(data_dict)
@@ -187,7 +183,7 @@ class ConfigurationHandler(BaseHandler):
         if not project_code or not environment or not service or not filename:
             return self.write(dict(code=-1, msg='关键参数不能为空'))
 
-        the_pro_env_list = check_permissions(self.get_current_nickname())
+        the_pro_env_list, the_pro_per_dict = check_permissions(self.get_current_nickname())
         if not self.is_superuser:
             if "{}/{}".format(project_code, environment) not in the_pro_env_list:
                 return self.write(dict(code=-2, msg='没有权限', data=dict(content='')))
@@ -200,9 +196,11 @@ class ConfigurationHandler(BaseHandler):
                                                                  KerriganConfig.service == service,
                                                                  KerriganConfig.filename == filename,
                                                                  KerriganConfig.is_deleted == False).first()
-                config_key = "/{}/{}/{}/{}".format(conf_info.project_code, conf_info.environment, conf_info.service, conf_info.filename)
+                config_key = "/{}/{}/{}/{}".format(conf_info.project_code, conf_info.environment, conf_info.service,
+                                                   conf_info.filename)
                 return self.write(
-                    dict(code=0, msg='获取成功', data=dict(content=conf_info.content, is_published=conf_info.is_published,config_key=config_key)))
+                    dict(code=0, msg='获取成功', data=dict(content=conf_info.content, is_published=conf_info.is_published,
+                                                       config_key=config_key)))
             else:
                 config_key = "/{}/{}/{}/{}".format(project_code, environment, service, filename)
                 conf_info = session.query(KerriganPublish).filter(KerriganPublish.config == config_key).first()
@@ -229,10 +227,10 @@ class ConfigurationHandler(BaseHandler):
             return self.write(dict(code=-1, msg='文件名不能有汉字'))
 
         ### 鉴权
-        the_pro_env_list = check_permissions(self.get_current_nickname())
+        the_pro_env_list, the_pro_per_dict = check_permissions(self.get_current_nickname())
         if not self.is_superuser:
             if "{}/{}".format(project_code, environment) not in the_pro_env_list:
-                return self.write(dict(code=-2, msg='没有权限', data=dict(content='')))
+                return self.write(dict(code=-2, msg='没有添加权限', data=dict(content='')))
 
         with DBContext('r') as session:
             is_exist = session.query(KerriganConfig.id).filter(KerriganConfig.project_code == project_code,
@@ -254,6 +252,8 @@ class ConfigurationHandler(BaseHandler):
             session.add(
                 KerriganConfig(project_code=project_code, environment=environment, service=service,
                                filename=filename, content=content, create_user=self.get_current_nickname()))
+            session.add(KerriganPermissions(project_code=project_code, environment=environment,
+                                            nickname=self.get_current_nickname(), is_admin=True))
 
             ### 历史记录
             session.add(KerriganHistory(config=config_key, content=content, create_user=self.get_current_nickname()))
@@ -272,7 +272,7 @@ class ConfigurationHandler(BaseHandler):
             return self.write(dict(code=-1, msg='关键参数不能为空'))
 
         ### 鉴权
-        the_pro_env_list = check_permissions(self.get_current_nickname())
+        the_pro_env_list, the_pro_per_dict = check_permissions(self.get_current_nickname())
         if not self.is_superuser:
             if "{}/{}".format(project_code, environment) not in the_pro_env_list:
                 return self.write(dict(code=-2, msg='没有权限', data=dict(content='')))
@@ -300,9 +300,11 @@ class ConfigurationHandler(BaseHandler):
             return self.write(dict(code=-1, msg='关键参数不能为空'))
 
         ### 鉴权
-        the_pro_env_list = check_permissions(self.get_current_nickname())
+        the_pro_env_list, the_pro_per_dict = check_permissions(self.get_current_nickname())
+        ### 不是超级管理员  也不是管理员的 没有删除权限
+
         if not self.is_superuser:
-            if "{}/{}".format(project_code, environment) not in the_pro_env_list:
+            if not the_pro_per_dict.get('is_admin'):
                 return self.write(dict(code=-2, msg='没有权限', data=dict(content='')))
 
         with DBContext('w', None, True) as session:
@@ -329,10 +331,10 @@ class ConfigurationHandler(BaseHandler):
             publish = session.query(KerriganPublish.id).filter(KerriganPublish.config == config_key).first()
 
             ### 鉴权
-            the_pro_env_list = check_permissions(self.get_current_nickname())
+            the_pro_env_list, the_pro_per_dict = check_permissions(self.get_current_nickname())
             if not self.is_superuser:
-                if "{}/{}".format(config_info.project_code, config_info.environment) not in the_pro_env_list:
-                    return self.write(dict(code=-2, msg='没有权限', data=dict(content='')))
+                if not the_pro_per_dict.get('is_admin'):
+                    return self.write(dict(code=-2, msg='不是管理员 没有发布权限', data=dict(content='')))
 
             if not publish:
                 session.add(KerriganPublish(config=config_key, content=config_info.content,
@@ -358,7 +360,7 @@ class HistoryConfigHandler(BaseHandler):
             return self.write(dict(code=-1, msg='关键参数不能为空'))
 
         ### 鉴权
-        the_pro_env_list = check_permissions(self.get_current_nickname())
+        the_pro_env_list, the_pro_per_dict = check_permissions(self.get_current_nickname())
         if not self.is_superuser:
             if "{}/{}".format(project_code, environment) not in the_pro_env_list:
                 return self.write(dict(code=-2, msg='没有权限', data=dict(content='')))
@@ -384,10 +386,10 @@ class HistoryConfigHandler(BaseHandler):
         project_code, environment = conf_info.config.split('/')[0], conf_info.config.split('/')[1]
 
         ### 鉴权
-        the_pro_env_list = check_permissions(self.get_current_nickname())
+        the_pro_env_list, the_pro_per_dict = check_permissions(self.get_current_nickname())
         if not self.is_superuser:
             if "{}/{}".format(project_code, environment) in the_pro_env_list:
-                return self.write(dict(code=-2, msg='没有权限', data=dict(content='')))
+                return self.write(dict(code=-1, msg='没有回滚权限'))
 
         with DBContext('w', None, True) as session:
             session.query(KerriganConfig).filter(KerriganConfig.project_code == conf_info.project_code,
@@ -397,6 +399,8 @@ class HistoryConfigHandler(BaseHandler):
                                                  KerriganConfig.is_deleted == False).update(
                 {KerriganConfig.content: conf_info.content, KerriganConfig.is_published: False,
                  KerriganConfig.create_user: self.get_current_nickname()})
+
+        return self.write(dict(code=0, msg='回滚版本完毕'))
 
 
 class DiffConfigHandler(BaseHandler):
@@ -436,17 +440,84 @@ class PermissionsHandler(BaseHandler):
 
         return self.write(dict(code=0, msg='获取成功', data=user_info))
 
+    ### 关联普通用户
     def post(self, *args, **kwargs):
-        # 关联用户
         data = json.loads(self.request.body.decode("utf-8"))
-        auth_user_list = data.get('auth_user_list')
+        project_code = data.get('project_code')
         environment = data.get('environment')
+        auth_user_list = data.get('auth_user_list')
+        user_list = []
 
+        if not project_code or not environment or not auth_user_list:
+            return self.write(dict(code=-1, msg='关键参数不能为空'))
+
+        with DBContext('r') as session:
+            user_info = session.query(KerriganPermissions.nickname).filter(
+                KerriganPermissions.project_code == project_code,
+                KerriganPermissions.environment == environment, KerriganPermissions.is_admin == False).all()
+
+        for u in user_info:
+            user_list.append(u[0])
+
+        ### 删除
+        del_user = list(set(auth_user_list) - set(user_list))
+        if del_user:
+            with DBContext('w', None, True) as session:
+                for user in del_user:
+                    session.query(KerriganPermissions).filter(KerriganPermissions.project_code == project_code,
+                                                              KerriganPermissions.environment == environment,
+                                                              KerriganPermissions.nickname == user).delete(
+                        synchronize_session=False)
+        ### 添加
+        add_user = list(set(user_list) - set(auth_user_list))
+        with DBContext('w', None, True) as session:
+            for user in add_user:
+                session.add(KerriganPermissions(project_code=project_code, environment=environment, nickname=user))
+
+        msg = "添加了{}, 删除了{}".format(','.join(add_user), ','.join(del_user))
+        return self.write(dict(code=0, msg=msg))
+
+    ### 关联管理员
     def put(self, *args, **kwargs):
-        pass
+        data = json.loads(self.request.body.decode("utf-8"))
+        project_code = data.get('project_code')
+        auth_user_list = data.get('auth_user_list')
+        admin_user_list = []
 
-    def delete(self, *args, **kwargs):
-        pass
+        if not project_code or not auth_user_list:
+            return self.write(dict(code=-1, msg='关键参数不能为空'))
+
+        with DBContext('r') as session:
+            user_info = session.query(KerriganPermissions.nickname).filter(
+                KerriganPermissions.project_code == project_code, KerriganPermissions.is_admin == True).all()
+
+            conf_info_exist = session.query(KerriganConfig.service).filter(KerriganConfig.project_code == project_code,
+                                                                           KerriganConfig.is_deleted == False).first()
+        if not conf_info_exist:
+            return self.write(dict(code=-2, msg='首先, 你此项目需要一份配置'))
+
+        for u in user_info:
+            admin_user_list.append(u[0])
+
+        ### 删除
+        del_user = list(set(auth_user_list) - set(admin_user_list))
+        if del_user:
+            with DBContext('w', None, True) as session:
+                for user in del_user:
+                    session.query(KerriganPermissions).filter(KerriganPermissions.project_code == project_code,
+                                                              KerriganPermissions.nickname == user,
+                                                              KerriganPermissions.is_admin == True).delete(
+                        synchronize_session=False)
+        ### 添加
+        add_user = list(set(admin_user_list) - set(auth_user_list))
+        with DBContext('w', None, True) as session:
+            for user in add_user:
+                session.add(KerriganPermissions(project_code=project_code, environment=conf_info_exist.environment,
+                                                nickname=user,
+                                                is_admin=True))
+
+        msg = "管理员 添加了{}, 删除了{}".format(','.join(add_user), ','.join(del_user))
+        return self.write(dict(code=0, msg=msg))
 
 
 config_urls = [
