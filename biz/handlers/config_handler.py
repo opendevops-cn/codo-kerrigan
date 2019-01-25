@@ -89,6 +89,8 @@ class ProjectHandler(BaseHandler):
                 return self.write(dict(code=-2, msg='名称不能重复'))
 
             session.add(KerriganProject(project_name=project_name, project_code=project_code, create_user=nickname))
+            session.add(KerriganPermissions(project_code=project_code, environment='all_env',
+                                            nickname=self.get_current_nickname(), is_admin=True))
 
         self.write(dict(code=0, msg='添加成功'))
 
@@ -118,7 +120,7 @@ class ProjectTreeHandler(BaseHandler):
         for m in config_info:
             data_dict = model_to_dict(m)
             data_dict.pop('create_time')
-            if not self.is_superuser:
+            if not self.is_superuser or not the_pro_per_dict.get(project_code):
                 if "{}/{}".format(data_dict['project_code'], data_dict['environment']) in the_pro_env_list:
                     config_list.append(data_dict)
             else:
@@ -166,7 +168,8 @@ class ProjectTreeHandler(BaseHandler):
                 tmp_tree["environ"][tmpService["parent"]]["children"].append(tmpService)
 
             for tmpEnviron in tmp_tree["environ"].values():
-                _tree[0]["children"].append(tmpEnviron)
+                if tmpEnviron not in ["all", "all_env"]:
+                    _tree[0]["children"].append(tmpEnviron)
 
             return self.write(dict(code=0, msg='获取项目Tree成功', data=_tree))
         else:
@@ -226,11 +229,13 @@ class ConfigurationHandler(BaseHandler):
         if check_contain_chinese(filename):
             return self.write(dict(code=-1, msg='文件名不能有汉字'))
 
+        if environment in ["all","all_env"]:
+            return self.write(dict(code=-1, msg='环境名称不合法'))
+
         ### 鉴权
         the_pro_env_list, the_pro_per_dict = check_permissions(self.get_current_nickname())
-        if not self.is_superuser:
-            if "{}/{}".format(project_code, environment) not in the_pro_env_list:
-                return self.write(dict(code=-2, msg='没有添加权限', data=dict(content='')))
+        if not self.is_superuser or not the_pro_per_dict.get(project_code):
+                return self.write(dict(code=-2, msg='没有添加权限'))
 
         with DBContext('r') as session:
             is_exist = session.query(KerriganConfig.id).filter(KerriganConfig.project_code == project_code,
@@ -252,8 +257,8 @@ class ConfigurationHandler(BaseHandler):
             session.add(
                 KerriganConfig(project_code=project_code, environment=environment, service=service,
                                filename=filename, content=content, create_user=self.get_current_nickname()))
-            session.add(KerriganPermissions(project_code=project_code, environment=environment,
-                                            nickname=self.get_current_nickname(), is_admin=True))
+            # session.add(KerriganPermissions(project_code=project_code, environment=environment,
+            #                                 nickname=self.get_current_nickname(), is_admin=True))
 
             ### 历史记录
             session.add(KerriganHistory(config=config_key, content=content, create_user=self.get_current_nickname()))
@@ -304,7 +309,7 @@ class ConfigurationHandler(BaseHandler):
         ### 不是超级管理员  也不是管理员的 没有删除权限
 
         if not self.is_superuser:
-            if not the_pro_per_dict.get('is_admin'):
+            if not the_pro_per_dict.get(project_code):
                 return self.write(dict(code=-2, msg='没有权限', data=dict(content='')))
 
         with DBContext('w', None, True) as session:
@@ -333,7 +338,7 @@ class ConfigurationHandler(BaseHandler):
             ### 鉴权
             the_pro_env_list, the_pro_per_dict = check_permissions(self.get_current_nickname())
             if not self.is_superuser:
-                if not the_pro_per_dict.get('is_admin'):
+                if not the_pro_per_dict.get(config_info.project_code):
                     return self.write(dict(code=-2, msg='不是管理员 没有发布权限', data=dict(content='')))
 
             if not publish:
@@ -427,11 +432,13 @@ class PermissionsHandler(BaseHandler):
         environment = self.get_argument('environment', default=None, strip=True)
         user_list = []
         admin_list = []
-        print(self.is_superuser)
+
+        nickname = self.get_current_nickname()
         if not project_code or not environment:
             return self.write(dict(code=-1, msg='关键参数不能为空'))
 
         with DBContext('r') as session:
+            ### 获取管理员
             if environment == 'all_env':
                 user_info = session.query(KerriganPermissions.nickname, KerriganPermissions.is_admin).filter(
                     KerriganPermissions.project_code == project_code).all()
@@ -445,11 +452,12 @@ class PermissionsHandler(BaseHandler):
             if u[1]: admin_list.append(u[0])
         admin_list = list(set(admin_list))
         user_list = list(set(user_list))
-        print(admin_list)
-        print(user_list)
-        return self.write(dict(code=0, msg='获取成功', data=dict(
-            user_list=user_list, admin_list=admin_list
-        )))
+
+        if not self.is_superuser:
+            if environment == 'all_env' and nickname not in admin_list:
+                return self.write(dict(code=-1, msg='只有管理员才能查看管理员列表'))
+
+        return self.write(dict(code=0, msg='获取成功', data=dict(user_list=user_list, admin_list=admin_list)))
 
     ### 关联普通用户
     def post(self, *args, **kwargs):
@@ -461,6 +469,9 @@ class PermissionsHandler(BaseHandler):
 
         if not project_code or not environment:
             return self.write(dict(code=-1, msg='关键参数不能为空'))
+
+        if not isinstance(auth_user_list, list):
+            return self.write(dict(code=-1, msg='授权用户应以列表形式传入'))
 
         with DBContext('r') as session:
             user_info = session.query(KerriganPermissions.nickname).filter(
@@ -486,19 +497,20 @@ class PermissionsHandler(BaseHandler):
             for user in add_user:
                 session.add(KerriganPermissions(project_code=project_code, environment=environment, nickname=user))
 
-        msg = "授权用户成功"
-        return self.write(dict(code=0, msg=msg))
+        return self.write(dict(code=0, msg="授权用户成功"))
 
     ### 关联管理员
     def put(self, *args, **kwargs):
         data = json.loads(self.request.body.decode("utf-8"))
         project_code = data.get('project_code')
         auth_user_list = data.get('auth_user_list')
-        print(project_code, auth_user_list)
         admin_user_list = []
 
         if not project_code:
             return self.write(dict(code=-1, msg='关键参数不能为空'))
+
+        if not isinstance(auth_user_list, list):
+            return self.write(dict(code=-1, msg='授权管理员应以列表形式传入'))
 
         with DBContext('r') as session:
             user_info = session.query(KerriganPermissions.nickname).filter(
@@ -513,7 +525,7 @@ class PermissionsHandler(BaseHandler):
 
         ### 删除
         del_user = list(set(admin_user_list) - set(auth_user_list))
-        print(del_user)
+
         if del_user:
             with DBContext('w', None, True) as session:
                 for user in del_user:
@@ -523,14 +535,11 @@ class PermissionsHandler(BaseHandler):
                         synchronize_session=False)
         ### 添加
         add_user = list(set(auth_user_list) - set(admin_user_list))
-        print(add_user)
         with DBContext('w', None, True) as session:
             for user in add_user:
                 session.add(KerriganPermissions(project_code=project_code, environment=conf_info_exist.environment,
                                                 nickname=user, is_admin=True))
-
-        msg = "授权管理员成功"
-        return self.write(dict(code=0, msg=msg))
+        return self.write(dict(code=0, msg="授权管理员成功"))
 
 
 config_urls = [
