@@ -108,7 +108,7 @@ class ProjectTreeHandler(BaseHandler):
             project_info = session.query(KerriganProject.project_name).filter(
                 KerriganConfig.project_code == project_code).first()
 
-        the_pro_env_list = check_permissions(nickname)
+        the_pro_env_list, the_pro_per_dict = check_permissions(nickname)
 
         if not project_info:
             project_name = project_code
@@ -426,19 +426,30 @@ class PermissionsHandler(BaseHandler):
         project_code = self.get_argument('project_code', default=None, strip=True)
         environment = self.get_argument('environment', default=None, strip=True)
         user_list = []
-
+        admin_list = []
+        print(self.is_superuser)
         if not project_code or not environment:
             return self.write(dict(code=-1, msg='关键参数不能为空'))
 
         with DBContext('r') as session:
-            user_info = session.query(KerriganPermissions.nickname).filter(
-                KerriganPermissions.project_code == project_code,
-                KerriganPermissions.environment == environment).all()
+            if environment == 'all_env':
+                user_info = session.query(KerriganPermissions.nickname, KerriganPermissions.is_admin).filter(
+                    KerriganPermissions.project_code == project_code).all()
+            else:
+                user_info = session.query(KerriganPermissions.nickname, KerriganPermissions.is_admin).filter(
+                    KerriganPermissions.project_code == project_code,
+                    KerriganPermissions.environment == environment).all()
 
         for u in user_info:
             user_list.append(u[0])
-
-        return self.write(dict(code=0, msg='获取成功', data=user_info))
+            if u[1]: admin_list.append(u[0])
+        admin_list = list(set(admin_list))
+        user_list = list(set(user_list))
+        print(admin_list)
+        print(user_list)
+        return self.write(dict(code=0, msg='获取成功', data=dict(
+            user_list=user_list, admin_list=admin_list
+        )))
 
     ### 关联普通用户
     def post(self, *args, **kwargs):
@@ -448,7 +459,7 @@ class PermissionsHandler(BaseHandler):
         auth_user_list = data.get('auth_user_list')
         user_list = []
 
-        if not project_code or not environment or not auth_user_list:
+        if not project_code or not environment:
             return self.write(dict(code=-1, msg='关键参数不能为空'))
 
         with DBContext('r') as session:
@@ -460,21 +471,22 @@ class PermissionsHandler(BaseHandler):
             user_list.append(u[0])
 
         ### 删除
-        del_user = list(set(auth_user_list) - set(user_list))
+        del_user = list(set(user_list) - set(auth_user_list))
         if del_user:
             with DBContext('w', None, True) as session:
                 for user in del_user:
                     session.query(KerriganPermissions).filter(KerriganPermissions.project_code == project_code,
                                                               KerriganPermissions.environment == environment,
-                                                              KerriganPermissions.nickname == user).delete(
+                                                              KerriganPermissions.nickname == user,
+                                                              KerriganPermissions.is_admin == False).delete(
                         synchronize_session=False)
         ### 添加
-        add_user = list(set(user_list) - set(auth_user_list))
+        add_user = list(set(auth_user_list) - set(user_list))
         with DBContext('w', None, True) as session:
             for user in add_user:
                 session.add(KerriganPermissions(project_code=project_code, environment=environment, nickname=user))
 
-        msg = "添加了{}, 删除了{}".format(','.join(add_user), ','.join(del_user))
+        msg = "授权用户成功"
         return self.write(dict(code=0, msg=msg))
 
     ### 关联管理员
@@ -482,25 +494,26 @@ class PermissionsHandler(BaseHandler):
         data = json.loads(self.request.body.decode("utf-8"))
         project_code = data.get('project_code')
         auth_user_list = data.get('auth_user_list')
+        print(project_code, auth_user_list)
         admin_user_list = []
 
-        if not project_code or not auth_user_list:
+        if not project_code:
             return self.write(dict(code=-1, msg='关键参数不能为空'))
 
         with DBContext('r') as session:
             user_info = session.query(KerriganPermissions.nickname).filter(
                 KerriganPermissions.project_code == project_code, KerriganPermissions.is_admin == True).all()
 
-            conf_info_exist = session.query(KerriganConfig.service).filter(KerriganConfig.project_code == project_code,
-                                                                           KerriganConfig.is_deleted == False).first()
+            conf_info_exist = session.query(KerriganConfig).filter(KerriganConfig.project_code == project_code,
+                                                                   KerriganConfig.is_deleted == False).first()
         if not conf_info_exist:
             return self.write(dict(code=-2, msg='首先, 你此项目需要一份配置'))
-
         for u in user_info:
             admin_user_list.append(u[0])
 
         ### 删除
-        del_user = list(set(auth_user_list) - set(admin_user_list))
+        del_user = list(set(admin_user_list) - set(auth_user_list))
+        print(del_user)
         if del_user:
             with DBContext('w', None, True) as session:
                 for user in del_user:
@@ -509,14 +522,14 @@ class PermissionsHandler(BaseHandler):
                                                               KerriganPermissions.is_admin == True).delete(
                         synchronize_session=False)
         ### 添加
-        add_user = list(set(admin_user_list) - set(auth_user_list))
+        add_user = list(set(auth_user_list) - set(admin_user_list))
+        print(add_user)
         with DBContext('w', None, True) as session:
             for user in add_user:
                 session.add(KerriganPermissions(project_code=project_code, environment=conf_info_exist.environment,
-                                                nickname=user,
-                                                is_admin=True))
+                                                nickname=user, is_admin=True))
 
-        msg = "管理员 添加了{}, 删除了{}".format(','.join(add_user), ','.join(del_user))
+        msg = "授权管理员成功"
         return self.write(dict(code=0, msg=msg))
 
 
