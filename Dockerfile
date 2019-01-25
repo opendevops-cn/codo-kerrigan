@@ -19,13 +19,13 @@ RUN pip3 install -U git+https://github.com/ss1917/ops_sdk.git
 
 # 4. 复制代码
 RUN mkdir -p /var/www/
-ADD . /var/www/codo-task/
+ADD . /var/www/kerrigan/
 
 # 5. 安装pip依赖
-RUN pip3 install -r /var/www/codo-task/doc/requirements.txt
+RUN pip3 install -r /var/www/kerrigan/doc/requirements.txt
 
 # 6. 初始化生成表结构
-#RUN python3 /var/www/codo-task/db_sync.py
+#RUN python3 /var/www/kerrigan/db_sync.py
 
 # 7. 日志
 VOLUME /var/log/

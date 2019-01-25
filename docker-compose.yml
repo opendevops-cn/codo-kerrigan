@@ -1,9 +1,9 @@
-task_scheduler:
+codo-kerrigan:
   restart: unless-stopped
-  image: task_scheduler_image
+  image: kerrigan_image
   volumes:
     - /var/log/supervisor/:/var/log/supervisor/
     - /opt/ops_scripts:/opt/ops_scripts
     - /sys/fs/cgroup:/sys/fs/cgroup
   ports:
-    - "8020:80"
+    - "8030:80"
