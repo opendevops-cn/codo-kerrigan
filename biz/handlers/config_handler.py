@@ -62,7 +62,7 @@ class ProjectHandler(BaseHandler):
             data_dict['create_time'] = str(data_dict['create_time'])
 
             if not self.is_superuser:
-                if data_dict['project_code'] in the_project_list and nickname == data_dict['create_user']:
+                if data_dict['project_code'] in the_project_list or nickname == data_dict['create_user']:
                     project_list.append(data_dict)
             else:
                 project_list.append(data_dict)
