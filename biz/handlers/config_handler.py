@@ -25,6 +25,8 @@ def check_contain_chinese(check_str):
 def check_permissions(nickname):
     the_project_list = []
     the_pro_env_list = []
+    is_admin = False
+    the_permission_dict = {}
     with DBContext('r') as session:
         the_project = session.query(KerriganPermissions).filter(KerriganPermissions.nickname == nickname).all()
 
@@ -32,6 +34,10 @@ def check_permissions(nickname):
         data_dict = model_to_dict(msg)
         the_project_list.append(data_dict['project_code'])
         the_pro_env_list.append("{}/{}".format(data_dict['project_code'], data_dict['environment']))
+        is_admin = data_dict['is_admin'] if data_dict['is_admin'] else is_admin
+        the_permission_dict[data_dict['project_code']] = data_dict['is_admin']
+    print(the_pro_env_list)
+    print(the_permission_dict)
     return the_pro_env_list
 
 
@@ -48,18 +54,19 @@ class ProjectHandler(BaseHandler):
                         KerriganProject.project_code.like('%{}%'.format(key)))).all()
             else:
                 project_info = session.query(KerriganProject).all()
-            the_project = session.query(KerriganPermissions).filter(KerriganPermissions.nickname == nickname).all()
 
-        for msg in the_project:
-            data_dict = model_to_dict(msg)
-            the_project_list.append(data_dict['project_code'])
+        the_pro_env_list = check_permissions(self.get_current_nickname())
+        for p in the_pro_env_list:
+            the_project_list.append(p.split('/')[0])
+
+        print(the_project_list)
 
         for msg in project_info:
             data_dict = model_to_dict(msg)
             data_dict['create_time'] = str(data_dict['create_time'])
 
             if not self.is_superuser:
-                if data_dict['project_code'] in the_project_list:
+                if data_dict['project_code'] in the_project_list and nickname == data_dict['create_user']:
                     project_list.append(data_dict)
             else:
                 project_list.append(data_dict)
@@ -116,12 +123,12 @@ class ProjectTreeHandler(BaseHandler):
             data_dict = model_to_dict(m)
             data_dict.pop('create_time')
             if not self.is_superuser:
-                if "{}/{}".format(data_dict['project_code'], data_dict['environment']) in the_pro_env_list:
+                if "{}/{}".format(data_dict['project_code'], data_dict['environment']) in  the_pro_env_list:
                     config_list.append(data_dict)
             else:
                 config_list.append(data_dict)
 
-        _tree = [{"expand": True, "title": project_code, "children": [],
+        _tree = [{"expand": True, "title": project_code, "children": [], "data_type": 'project',
                   "display_name": "%s | %s" % (project_code, project_name)}]
 
         if config_list:
@@ -136,13 +143,13 @@ class ProjectTreeHandler(BaseHandler):
 
                 # 因为是第一层所以没有parent
                 tmp_tree["environ"][environ] = {
-                    "expand": True, "title": environ, "parent": "root", "children": []
+                    "expand": True, "title": environ, "parent": "root", "children": [], "data_type": 'env'
                 }
 
                 # 父节点是对应的environ
                 tmp_tree["service"][environ + "|" + service] = {
                     "expand": True, "title": service, "parent": environ,
-                    "children": []
+                    "children": [], "data_type": 'service'
                 }
 
                 # 最后一层没有children
@@ -151,7 +158,8 @@ class ProjectTreeHandler(BaseHandler):
                     "title": filename,
                     "parent": environ + "|" + service,
                     "env": environ,
-                    "service": service
+                    "service": service,
+                    "data_type": 'file'
                 }
 
             for tmpFilename in tmp_tree["filename"].values():
@@ -164,9 +172,9 @@ class ProjectTreeHandler(BaseHandler):
             for tmpEnviron in tmp_tree["environ"].values():
                 _tree[0]["children"].append(tmpEnviron)
 
-            return self.write(dict(code=0, msg='成功', data=_tree))
+            return self.write(dict(code=0, msg='获取项目Tree成功', data=_tree))
         else:
-            return self.write(dict(code=-1, msg='成功', data=_tree))
+            return self.write(dict(code=-1, msg='获取项目Tree失败', data=_tree))
 
 
 class ConfigurationHandler(BaseHandler):
@@ -181,18 +189,20 @@ class ConfigurationHandler(BaseHandler):
 
         the_pro_env_list = check_permissions(self.get_current_nickname())
         if not self.is_superuser:
-            if "{}/{}".format(project_code, environment) in the_pro_env_list:
+            if "{}/{}".format(project_code, environment) not in the_pro_env_list:
                 return self.write(dict(code=-2, msg='没有权限', data=dict(content='')))
 
         with DBContext('r') as session:
             if not publish:
+
                 conf_info = session.query(KerriganConfig).filter(KerriganConfig.project_code == project_code,
                                                                  KerriganConfig.environment == environment,
                                                                  KerriganConfig.service == service,
                                                                  KerriganConfig.filename == filename,
                                                                  KerriganConfig.is_deleted == False).first()
+                config_key = "/{}/{}/{}/{}".format(conf_info.project_code, conf_info.environment, conf_info.service, conf_info.filename)
                 return self.write(
-                    dict(code=0, msg='获取成功', data=dict(content=conf_info.content, is_published=conf_info.is_published)))
+                    dict(code=0, msg='获取成功', data=dict(content=conf_info.content, is_published=conf_info.is_published,config_key=config_key)))
             else:
                 config_key = "/{}/{}/{}/{}".format(project_code, environment, service, filename)
                 conf_info = session.query(KerriganPublish).filter(KerriganPublish.config == config_key).first()
@@ -212,10 +222,16 @@ class ConfigurationHandler(BaseHandler):
         if not project_code or not environment or not service or not filename:
             return self.write(dict(code=-1, msg='关键参数不能为空'))
 
+        if check_contain_chinese(service):
+            return self.write(dict(code=-1, msg='服务名称不能有汉字'))
+
+        if check_contain_chinese(filename):
+            return self.write(dict(code=-1, msg='文件名不能有汉字'))
+
         ### 鉴权
         the_pro_env_list = check_permissions(self.get_current_nickname())
         if not self.is_superuser:
-            if "{}/{}".format(project_code, environment) in the_pro_env_list:
+            if "{}/{}".format(project_code, environment) not in the_pro_env_list:
                 return self.write(dict(code=-2, msg='没有权限', data=dict(content='')))
 
         with DBContext('r') as session:
@@ -258,7 +274,7 @@ class ConfigurationHandler(BaseHandler):
         ### 鉴权
         the_pro_env_list = check_permissions(self.get_current_nickname())
         if not self.is_superuser:
-            if "{}/{}".format(project_code, environment) in the_pro_env_list:
+            if "{}/{}".format(project_code, environment) not in the_pro_env_list:
                 return self.write(dict(code=-2, msg='没有权限', data=dict(content='')))
 
         with DBContext('w', None, True) as session:
@@ -286,7 +302,7 @@ class ConfigurationHandler(BaseHandler):
         ### 鉴权
         the_pro_env_list = check_permissions(self.get_current_nickname())
         if not self.is_superuser:
-            if "{}/{}".format(project_code, environment) in the_pro_env_list:
+            if "{}/{}".format(project_code, environment) not in the_pro_env_list:
                 return self.write(dict(code=-2, msg='没有权限', data=dict(content='')))
 
         with DBContext('w', None, True) as session:
@@ -315,7 +331,7 @@ class ConfigurationHandler(BaseHandler):
             ### 鉴权
             the_pro_env_list = check_permissions(self.get_current_nickname())
             if not self.is_superuser:
-                if "{}/{}".format(config_info.project_code, config_info.environment) in the_pro_env_list:
+                if "{}/{}".format(config_info.project_code, config_info.environment) not in the_pro_env_list:
                     return self.write(dict(code=-2, msg='没有权限', data=dict(content='')))
 
             if not publish:
@@ -344,7 +360,7 @@ class HistoryConfigHandler(BaseHandler):
         ### 鉴权
         the_pro_env_list = check_permissions(self.get_current_nickname())
         if not self.is_superuser:
-            if "{}/{}".format(project_code, environment) in the_pro_env_list:
+            if "{}/{}".format(project_code, environment) not in the_pro_env_list:
                 return self.write(dict(code=-2, msg='没有权限', data=dict(content='')))
 
         history_list = []
@@ -421,8 +437,10 @@ class PermissionsHandler(BaseHandler):
         return self.write(dict(code=0, msg='获取成功', data=user_info))
 
     def post(self, *args, **kwargs):
-        pass
-
+        # 关联用户
+        data = json.loads(self.request.body.decode("utf-8"))
+        auth_user_list = data.get('auth_user_list')
+        environment = data.get('environment')
 
     def put(self, *args, **kwargs):
         pass
