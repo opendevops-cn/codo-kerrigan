@@ -283,8 +283,9 @@ class ConfigurationHandler(BaseHandler):
         ### 鉴权
         the_pro_env_list, the_pro_per_dict = check_permissions(self.get_current_nickname())
         if not self.is_superuser:
-            if "{}/{}".format(project_code, environment) not in the_pro_env_list:
-                return self.write(dict(code=-2, msg='没有权限', data=dict(content='')))
+            if not the_pro_per_dict.get(project_code):
+                if "{}/{}".format(project_code, environment) not in the_pro_env_list:
+                    return self.write(dict(code=-2, msg='没有权限'))
 
         with DBContext('w', None, True) as session:
             session.query(KerriganConfig).filter(KerriganConfig.project_code == project_code,
@@ -428,7 +429,7 @@ class DiffConfigHandler(BaseHandler):
             publish_info = session.query(KerriganPublish).filter(KerriganPublish.config == config_key).first()
 
         if not publish_info:
-            return self.write(dict(code=-1, msg='历史数据为空'))
+            return self.write(dict(code=-1, msg='线上没有已发布数据'))
 
         src_data = publish_info.content.splitlines()
         html = difflib.HtmlDiff().make_file(src_data, diff_data, context=True, numlines=3)
