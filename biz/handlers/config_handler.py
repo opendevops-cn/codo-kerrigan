@@ -120,11 +120,12 @@ class ProjectTreeHandler(BaseHandler):
         for m in config_info:
             data_dict = model_to_dict(m)
             data_dict.pop('create_time')
-            if not self.is_superuser or not the_pro_per_dict.get(project_code):
-                if "{}/{}".format(data_dict['project_code'], data_dict['environment']) in the_pro_env_list:
-                    config_list.append(data_dict)
-            else:
+            ###如果是超级管理  或者是此项目的管理员
+            if self.is_superuser or the_pro_per_dict.get(project_code):
                 config_list.append(data_dict)
+            ###
+            elif "{}/{}".format(data_dict['project_code'], data_dict['environment']) in the_pro_env_list:
+                    config_list.append(data_dict)
 
         _tree = [{"expand": True, "title": project_code, "children": [], "data_type": 'project',
                   "display_name": "%s | %s" % (project_code, project_name)}]
@@ -173,7 +174,7 @@ class ProjectTreeHandler(BaseHandler):
 
             return self.write(dict(code=0, msg='获取项目Tree成功', data=_tree))
         else:
-            return self.write(dict(code=-1, msg='获取项目Tree失败', data=_tree))
+            return self.write(dict(code=0, msg='获取项目Tree失败', data=_tree))
 
 
 class ConfigurationHandler(BaseHandler):
@@ -466,6 +467,7 @@ class PermissionsHandler(BaseHandler):
         environment = data.get('environment')
         auth_user_list = data.get('auth_user_list')
         user_list = []
+        admin_user_list = []
 
         if not project_code or not environment:
             return self.write(dict(code=-1, msg='关键参数不能为空'))
@@ -477,9 +479,16 @@ class PermissionsHandler(BaseHandler):
             user_info = session.query(KerriganPermissions.nickname).filter(
                 KerriganPermissions.project_code == project_code,
                 KerriganPermissions.environment == environment, KerriganPermissions.is_admin == False).all()
+            admin_user_info = session.query(KerriganPermissions.nickname).filter(
+                KerriganPermissions.project_code == project_code, KerriganPermissions.is_admin == True).all()
 
         for u in user_info:
             user_list.append(u[0])
+        for u in admin_user_info:
+            admin_user_list.append(u[0])
+
+        if not self.is_superuser or not self.get_current_nickname() not in admin_user_list:
+            return self.write(dict(code=-1, msg='只有管理员才能给用户授权'))
 
         ### 删除
         del_user = list(set(user_list) - set(auth_user_list))
@@ -522,6 +531,9 @@ class PermissionsHandler(BaseHandler):
             return self.write(dict(code=-2, msg='首先, 你此项目需要一份配置'))
         for u in user_info:
             admin_user_list.append(u[0])
+
+        if not self.is_superuser or not self.get_current_nickname() not in admin_user_list:
+            return self.write(dict(code=-1, msg='只有管理员才能修改管理员列表'))
 
         ### 删除
         del_user = list(set(admin_user_list) - set(auth_user_list))
