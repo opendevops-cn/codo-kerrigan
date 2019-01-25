@@ -370,8 +370,9 @@ class HistoryConfigHandler(BaseHandler):
         ### 鉴权
         the_pro_env_list, the_pro_per_dict = check_permissions(self.get_current_nickname())
         if not self.is_superuser:
-            if "{}/{}".format(project_code, environment) not in the_pro_env_list:
-                return self.write(dict(code=-2, msg='没有权限', data=dict(content='')))
+            if not the_pro_per_dict.get(project_code):
+                if "{}/{}".format(project_code, environment) not in the_pro_env_list:
+                    return self.write(dict(code=-2, msg='没有权限'))
 
         history_list = []
         config_key = "/{}/{}/{}/{}".format(project_code, environment, service, filename)
