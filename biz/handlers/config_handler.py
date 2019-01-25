@@ -429,7 +429,7 @@ class DiffConfigHandler(BaseHandler):
             publish_info = session.query(KerriganPublish).filter(KerriganPublish.config == config_key).first()
 
         if not publish_info:
-            return self.write(dict(code=-1, msg='线上没有已发布数据'))
+            return self.write(dict(code=0, msg='对比内容获取成功', data='线上没有已发布数据'))
 
         src_data = publish_info.content.splitlines()
         html = difflib.HtmlDiff().make_file(src_data, diff_data, context=True, numlines=3)
