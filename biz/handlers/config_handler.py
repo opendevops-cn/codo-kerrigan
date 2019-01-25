@@ -235,7 +235,8 @@ class ConfigurationHandler(BaseHandler):
 
         ### 鉴权
         the_pro_env_list, the_pro_per_dict = check_permissions(self.get_current_nickname())
-        if not self.is_superuser or not the_pro_per_dict.get(project_code):
+        if not self.is_superuser:
+            if not the_pro_per_dict.get(project_code):
                 return self.write(dict(code=-2, msg='没有添加权限'))
 
         with DBContext('r') as session:
