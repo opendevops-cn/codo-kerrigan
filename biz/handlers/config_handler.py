@@ -125,7 +125,7 @@ class ProjectTreeHandler(BaseHandler):
                 config_list.append(data_dict)
             ###
             elif "{}/{}".format(data_dict['project_code'], data_dict['environment']) in the_pro_env_list:
-                    config_list.append(data_dict)
+                config_list.append(data_dict)
 
         _tree = [{"expand": True, "title": project_code, "children": [], "data_type": 'project',
                   "display_name": "%s | %s" % (project_code, project_name)}]
@@ -189,8 +189,9 @@ class ConfigurationHandler(BaseHandler):
 
         the_pro_env_list, the_pro_per_dict = check_permissions(self.get_current_nickname())
         if not self.is_superuser:
-            if "{}/{}".format(project_code, environment) not in the_pro_env_list:
-                return self.write(dict(code=-2, msg='没有权限', data=dict(content='')))
+            if not the_pro_per_dict.get(project_code):
+                if "{}/{}".format(project_code, environment) not in the_pro_env_list:
+                    return self.write(dict(code=-2, msg='没有权限'))
 
         with DBContext('r') as session:
             if not publish:
@@ -202,9 +203,10 @@ class ConfigurationHandler(BaseHandler):
                                                                  KerriganConfig.is_deleted == False).first()
                 config_key = "/{}/{}/{}/{}".format(conf_info.project_code, conf_info.environment, conf_info.service,
                                                    conf_info.filename)
-                return self.write(
-                    dict(code=0, msg='获取成功', data=dict(content=conf_info.content, is_published=conf_info.is_published,
-                                                       config_key=config_key)))
+
+                return self.write(dict(code=0, msg='获取成功', data=dict(content=conf_info.content,
+                                                                     is_published=conf_info.is_published,
+                                                                     config_key=config_key)))
             else:
                 config_key = "/{}/{}/{}/{}".format(project_code, environment, service, filename)
                 conf_info = session.query(KerriganPublish).filter(KerriganPublish.config == config_key).first()
@@ -230,7 +232,7 @@ class ConfigurationHandler(BaseHandler):
         if check_contain_chinese(filename):
             return self.write(dict(code=-1, msg='文件名不能有汉字'))
 
-        if environment in ["all","all_env"]:
+        if environment in ["all", "all_env"]:
             return self.write(dict(code=-1, msg='环境名称不合法'))
 
         ### 鉴权
@@ -292,7 +294,6 @@ class ConfigurationHandler(BaseHandler):
                                                  KerriganConfig.is_deleted == False).update(
                 {KerriganConfig.content: content, KerriganConfig.is_published: False,
                  KerriganConfig.create_user: self.get_current_nickname()})
-            # KerriganConfig.create_user: 'yangmv'})
 
         self.write(dict(code=0, msg='配置修改成功'))
 
@@ -312,7 +313,7 @@ class ConfigurationHandler(BaseHandler):
 
         if not self.is_superuser:
             if not the_pro_per_dict.get(project_code):
-                return self.write(dict(code=-2, msg='没有权限', data=dict(content='')))
+                return self.write(dict(code=-2, msg='没有权限'))
 
         with DBContext('w', None, True) as session:
             session.query(KerriganConfig).filter(KerriganConfig.project_code == project_code,
@@ -395,7 +396,7 @@ class HistoryConfigHandler(BaseHandler):
         ### 鉴权
         the_pro_env_list, the_pro_per_dict = check_permissions(self.get_current_nickname())
         if not self.is_superuser:
-            if "{}/{}".format(project_code, environment) in the_pro_env_list:
+            if "{}/{}".format(project_code, environment) not in the_pro_env_list:
                 return self.write(dict(code=-1, msg='没有回滚权限'))
 
         with DBContext('w', None, True) as session:
@@ -488,8 +489,9 @@ class PermissionsHandler(BaseHandler):
         for u in admin_user_info:
             admin_user_list.append(u[0])
 
-        if not self.is_superuser or not self.get_current_nickname() not in admin_user_list:
-            return self.write(dict(code=-1, msg='只有管理员才能给用户授权'))
+        if not self.is_superuser:
+            if self.get_current_nickname() not in admin_user_list:
+                return self.write(dict(code=-1, msg='只有管理员才能给用户授权'))
 
         ### 删除
         del_user = list(set(user_list) - set(auth_user_list))
@@ -533,8 +535,9 @@ class PermissionsHandler(BaseHandler):
         for u in user_info:
             admin_user_list.append(u[0])
 
-        if not self.is_superuser or not self.get_current_nickname() not in admin_user_list:
-            return self.write(dict(code=-1, msg='只有管理员才能修改管理员列表'))
+        if not self.is_superuser:
+            if self.get_current_nickname() not in admin_user_list:
+                return self.write(dict(code=-1, msg='只有管理员才能修改管理员列表'))
 
         ### 删除
         del_user = list(set(admin_user_list) - set(auth_user_list))
