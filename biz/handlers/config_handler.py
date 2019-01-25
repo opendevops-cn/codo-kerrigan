@@ -391,15 +391,16 @@ class HistoryConfigHandler(BaseHandler):
         history_id = self.get_argument('history_id', default=None, strip=True)
 
         with DBContext('r') as session:
-            conf_info = session.query(KerriganHistory).filter(KerriganConfig.id == history_id).all()
+            conf_info = session.query(KerriganHistory).filter(KerriganHistory.id == history_id).first()
 
         project_code, environment = conf_info.config.split('/')[0], conf_info.config.split('/')[1]
 
         ### 鉴权
         the_pro_env_list, the_pro_per_dict = check_permissions(self.get_current_nickname())
         if not self.is_superuser:
-            if "{}/{}".format(project_code, environment) not in the_pro_env_list:
-                return self.write(dict(code=-1, msg='没有回滚权限'))
+            if not the_pro_per_dict.get(project_code):
+                if "{}/{}".format(project_code, environment) not in the_pro_env_list:
+                    return self.write(dict(code=-1, msg='没有回滚权限'))
 
         with DBContext('w', None, True) as session:
             session.query(KerriganConfig).filter(KerriganConfig.project_code == conf_info.project_code,
@@ -416,20 +417,28 @@ class HistoryConfigHandler(BaseHandler):
 class DiffConfigHandler(BaseHandler):
     def get(self, *args, **kwargs):
         config_id = self.get_argument('config_id', default=None, strip=True)
-        if not config_id:
+        history_id = self.get_argument('history_id', default=None, strip=True)
+        if config_id or history_id:
             return self.write(dict(code=-1, msg='关键参数不能为空'))
 
         with DBContext('r') as session:
             config_info = session.query(KerriganConfig).filter(KerriganConfig.id == config_id).first()
+            history_info = session.query(KerriganHistory).filter(KerriganHistory.id == history_id).first()
 
-        diff_data = config_info.content.splitlines()
-        config_key = "/{}/{}/{}/{}".format(config_info.project_code, config_info.environment, config_info.service,
+        if config_id:
+            diff_data = config_info.content.splitlines()
+            config_key = "/{}/{}/{}/{}".format(config_info.project_code, config_info.environment, config_info.service,
                                            config_info.filename)
+        else:
+            diff_data = history_info.content.splitlines()
+            config_key = history_info.config
+
         with DBContext('r') as session:
             publish_info = session.query(KerriganPublish).filter(KerriganPublish.config == config_key).first()
 
         if not publish_info:
-            return self.write(dict(code=0, msg='对比内容获取成功', data='线上没有已发布数据'))
+            html = difflib.HtmlDiff().make_file('', diff_data, context=True, numlines=3)
+            return self.write(dict(code=0, msg='对比内容获取成功', data=html))
 
         src_data = publish_info.content.splitlines()
         html = difflib.HtmlDiff().make_file(src_data, diff_data, context=True, numlines=3)
