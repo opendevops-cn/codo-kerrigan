@@ -419,31 +419,30 @@ class DiffConfigHandler(BaseHandler):
         config_id = self.get_argument('config_id', default=None, strip=True)
         history_id = self.get_argument('history_id', default=None, strip=True)
         if config_id or history_id:
-            return self.write(dict(code=-1, msg='关键参数不能为空'))
+            with DBContext('r') as session:
+                config_info = session.query(KerriganConfig).filter(KerriganConfig.id == config_id).first()
+                history_info = session.query(KerriganHistory).filter(KerriganHistory.id == history_id).first()
 
-        with DBContext('r') as session:
-            config_info = session.query(KerriganConfig).filter(KerriganConfig.id == config_id).first()
-            history_info = session.query(KerriganHistory).filter(KerriganHistory.id == history_id).first()
+            if config_id:
+                diff_data = config_info.content.splitlines()
+                config_key = "/{}/{}/{}/{}".format(config_info.project_code, config_info.environment, config_info.service,
+                                               config_info.filename)
+            else:
+                diff_data = history_info.content.splitlines()
+                config_key = history_info.config
 
-        if config_id:
-            diff_data = config_info.content.splitlines()
-            config_key = "/{}/{}/{}/{}".format(config_info.project_code, config_info.environment, config_info.service,
-                                           config_info.filename)
-        else:
-            diff_data = history_info.content.splitlines()
-            config_key = history_info.config
+            with DBContext('r') as session:
+                publish_info = session.query(KerriganPublish).filter(KerriganPublish.config == config_key).first()
 
-        with DBContext('r') as session:
-            publish_info = session.query(KerriganPublish).filter(KerriganPublish.config == config_key).first()
+            if not publish_info:
+                html = difflib.HtmlDiff().make_file('', diff_data, context=True, numlines=3)
+                return self.write(dict(code=0, msg='对比内容获取成功', data=html))
 
-        if not publish_info:
-            html = difflib.HtmlDiff().make_file('', diff_data, context=True, numlines=3)
+            src_data = publish_info.content.splitlines()
+            html = difflib.HtmlDiff().make_file(src_data, diff_data, context=True, numlines=3)
             return self.write(dict(code=0, msg='对比内容获取成功', data=html))
-
-        src_data = publish_info.content.splitlines()
-        html = difflib.HtmlDiff().make_file(src_data, diff_data, context=True, numlines=3)
-        return self.write(dict(code=0, msg='对比内容获取成功', data=html))
-
+        else:
+            return self.write(dict(code=-1, msg='关键参数不能为空'))
 
 class PermissionsHandler(BaseHandler):
     def get(self, *args, **kwargs):
