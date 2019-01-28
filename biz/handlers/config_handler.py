@@ -378,7 +378,7 @@ class HistoryConfigHandler(BaseHandler):
         history_list = []
         config_key = "/{}/{}/{}/{}".format(project_code, environment, service, filename)
         with DBContext('r') as session:
-            conf_info = session.query(KerriganHistory).filter(KerriganHistory.config == config_key).all()
+            conf_info = session.query(KerriganHistory).filter(KerriganHistory.config == config_key).order_by(-KerriganHistory.id).limit(50)
 
         for msg in conf_info:
             data_dict = model_to_dict(msg)
