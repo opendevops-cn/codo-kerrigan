@@ -388,12 +388,16 @@ class HistoryConfigHandler(BaseHandler):
 
     ### 回滚
     def patch(self, *args, **kwargs):
-        history_id = self.get_argument('history_id', default=None, strip=True)
+        data = json.loads(self.request.body.decode("utf-8"))
+        history_id = data.get('history_id')
 
         with DBContext('r') as session:
             conf_info = session.query(KerriganHistory).filter(KerriganHistory.id == history_id).first()
-
-        project_code, environment = conf_info.config.split('/')[0], conf_info.config.split('/')[1]
+        conf_info_config = conf_info.config.split('/')
+        project_code = conf_info_config[1]
+        environment = conf_info_config[2]
+        service = conf_info_config[3]
+        filename = conf_info_config[4]
 
         ### 鉴权
         the_pro_env_list, the_pro_per_dict = check_permissions(self.get_current_nickname())
@@ -403,10 +407,10 @@ class HistoryConfigHandler(BaseHandler):
                     return self.write(dict(code=-1, msg='没有回滚权限'))
 
         with DBContext('w', None, True) as session:
-            session.query(KerriganConfig).filter(KerriganConfig.project_code == conf_info.project_code,
-                                                 KerriganConfig.environment == conf_info.environment,
-                                                 KerriganConfig.service == conf_info.service,
-                                                 KerriganConfig.filename == conf_info.filename,
+            session.query(KerriganConfig).filter(KerriganConfig.project_code == project_code,
+                                                 KerriganConfig.environment == environment,
+                                                 KerriganConfig.service == service,
+                                                 KerriganConfig.filename == filename,
                                                  KerriganConfig.is_deleted == False).update(
                 {KerriganConfig.content: conf_info.content, KerriganConfig.is_published: False,
                  KerriganConfig.create_user: self.get_current_nickname()})
