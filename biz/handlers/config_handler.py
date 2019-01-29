@@ -183,7 +183,6 @@ class ConfigurationHandler(BaseHandler):
         environment = self.get_argument('environment', default=None, strip=True)
         service = self.get_argument('service', default=None, strip=True)
         filename = self.get_argument('filename', default=None, strip=True)
-        publish = self.get_argument('publish', default=None, strip=True)
         if not project_code or not environment or not service or not filename:
             return self.write(dict(code=-1, msg='关键参数不能为空'))
 
@@ -194,26 +193,20 @@ class ConfigurationHandler(BaseHandler):
                     return self.write(dict(code=-2, msg='没有权限'))
 
         with DBContext('r') as session:
-            if not publish:
 
-                conf_info = session.query(KerriganConfig).filter(KerriganConfig.project_code == project_code,
-                                                                 KerriganConfig.environment == environment,
-                                                                 KerriganConfig.service == service,
-                                                                 KerriganConfig.filename == filename,
-                                                                 KerriganConfig.is_deleted == False).first()
-                config_key = "/{}/{}/{}/{}".format(conf_info.project_code, conf_info.environment, conf_info.service,
-                                                   conf_info.filename)
-
-                return self.write(dict(code=0, msg='获取成功', data=dict(content=conf_info.content,
-                                                                     is_published=conf_info.is_published,
-                                                                     config_key=config_key)))
-            else:
-                config_key = "/{}/{}/{}/{}".format(project_code, environment, service, filename)
-                conf_info = session.query(KerriganPublish).filter(KerriganPublish.config == config_key).first()
+            conf_info = session.query(KerriganConfig).filter(KerriganConfig.project_code == project_code,
+                                                             KerriganConfig.environment == environment,
+                                                             KerriganConfig.service == service,
+                                                             KerriganConfig.filename == filename,
+                                                             KerriganConfig.is_deleted == False).first()
         if not conf_info:
             return self.write(dict(code=-3, msg='没有数据', data=dict(content='')))
 
-        self.write(dict(code=0, msg='获取成功', data=dict(content=conf_info.content)))
+        config_key = "/{}/{}/{}/{}".format(conf_info.project_code, conf_info.environment, conf_info.service,
+                                           conf_info.filename)
+
+        return self.write(dict(code=0, msg='获取成功', data=dict(config_key=config_key, content=conf_info.content,
+                                                             is_published=conf_info.is_published)))
 
     ### 添加
     def post(self, *args, **kwargs):
@@ -378,7 +371,8 @@ class HistoryConfigHandler(BaseHandler):
         history_list = []
         config_key = "/{}/{}/{}/{}".format(project_code, environment, service, filename)
         with DBContext('r') as session:
-            conf_info = session.query(KerriganHistory).filter(KerriganHistory.config == config_key).order_by(-KerriganHistory.id).limit(50)
+            conf_info = session.query(KerriganHistory).filter(KerriganHistory.config == config_key).order_by(
+                -KerriganHistory.id).limit(50)
 
         for msg in conf_info:
             data_dict = model_to_dict(msg)
@@ -429,8 +423,9 @@ class DiffConfigHandler(BaseHandler):
 
             if config_id:
                 diff_data = config_info.content.splitlines()
-                config_key = "/{}/{}/{}/{}".format(config_info.project_code, config_info.environment, config_info.service,
-                                               config_info.filename)
+                config_key = "/{}/{}/{}/{}".format(config_info.project_code, config_info.environment,
+                                                   config_info.service,
+                                                   config_info.filename)
             else:
                 diff_data = history_info.content.splitlines()
                 config_key = history_info.config
@@ -447,6 +442,7 @@ class DiffConfigHandler(BaseHandler):
             return self.write(dict(code=0, msg='对比内容获取成功', data=html))
         else:
             return self.write(dict(code=-1, msg='关键参数不能为空'))
+
 
 class PermissionsHandler(BaseHandler):
     def get(self, *args, **kwargs):
@@ -577,13 +573,73 @@ class PermissionsHandler(BaseHandler):
         return self.write(dict(code=0, msg="授权管理员成功"))
 
 
+class PublishServiceHandler(BaseHandler):
+    def get(self, *args, **kwargs):
+        project_code = self.get_argument('project_code', default=None, strip=True)
+        environment = self.get_argument('environment', default=None, strip=True)
+        service = self.get_argument('service', default=None, strip=True)
+        if not project_code or not environment or not service:
+            return self.write(dict(code=-1, msg='关键参数不能为空'))
+
+        the_pro_env_list, the_pro_per_dict = check_permissions(self.get_current_nickname())
+        if not self.is_superuser:
+            if not the_pro_per_dict.get(project_code):
+                if "{}/{}".format(project_code, environment) not in the_pro_env_list:
+                    return self.write(dict(code=-2, msg='没有权限'))
+
+        with DBContext('r') as session:
+            config_key = "/{}/{}/{}/%".format(project_code, environment, service)
+            conf_info = session.query(KerriganPublish).filter(KerriganPublish.config.like(config_key)).all()
+        if not conf_info:
+            return self.write(dict(code=-3, msg='没有数据'))
+
+        new_data = {}
+        for msg in conf_info:
+            data_dict = model_to_dict(msg)
+            new_data[data_dict['config']] = data_dict['content']
+
+        self.write(dict(code=0, msg='获取成功', data=new_data))
+
+
+class PublishConfigHandler(BaseHandler):
+    def get(self, *args, **kwargs):
+        project_code = self.get_argument('project_code', default=None, strip=True)
+        environment = self.get_argument('environment', default=None, strip=True)
+        service = self.get_argument('service', default=None, strip=True)
+        filename = self.get_argument('filename', default=None, strip=True)
+        if not project_code or not environment or not service or not filename:
+            return self.write(dict(code=-1, msg='关键参数不能为空'))
+
+        the_pro_env_list, the_pro_per_dict = check_permissions(self.get_current_nickname())
+        if not self.is_superuser:
+            if not the_pro_per_dict.get(project_code):
+                if "{}/{}".format(project_code, environment) not in the_pro_env_list:
+                    return self.write(dict(code=-2, msg='没有权限'))
+
+        with DBContext('r') as session:
+            config_key = "/{}/{}/{}/{}".format(project_code, environment, service, filename)
+            conf_info = session.query(KerriganPublish).filter(KerriganPublish.config == config_key).all()
+
+        if not conf_info:
+            return self.write(dict(code=-3, msg='没有数据'))
+
+        new_data = {}
+        for msg in conf_info:
+            data_dict = model_to_dict(msg)
+            new_data[data_dict['config']] = data_dict['content']
+
+        self.write(dict(code=0, msg='获取成功', data=new_data))
+
+
 config_urls = [
     (r"/v1/conf/project/", ProjectHandler),
     (r"/v1/conf/config/", ConfigurationHandler),
     (r"/v1/conf/tree/", ProjectTreeHandler),
     (r"/v1/conf/history/", HistoryConfigHandler),
     (r"/v1/conf/diff/", DiffConfigHandler),
-    (r"/v1/conf/permissions/", PermissionsHandler)
+    (r"/v1/conf/permissions/", PermissionsHandler),
+    (r"/v1/conf/publish/service/", PublishServiceHandler),
+    (r"/v1/conf/publish/config/", PublishConfigHandler),
 ]
 if __name__ == "__main__":
     pass
