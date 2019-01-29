@@ -251,14 +251,13 @@ class ConfigurationHandler(BaseHandler):
                                                  KerriganConfig.service == service, KerriganConfig.filename == filename
                                                  ).update({KerriganConfig.is_deleted: True})
 
-            session.add(
-                KerriganConfig(project_code=project_code, environment=environment, service=service,
+            session.add(KerriganConfig(project_code=project_code, environment=environment, service=service,
                                filename=filename, content=content, create_user=self.get_current_nickname()))
             # session.add(KerriganPermissions(project_code=project_code, environment=environment,
             #                                 nickname=self.get_current_nickname(), is_admin=True))
 
             ### 历史记录
-            session.add(KerriganHistory(config=config_key, content=content, create_user=self.get_current_nickname()))
+            # session.add(KerriganHistory(config=config_key, content=content, create_user=self.get_current_nickname()))
 
         self.write(dict(code=0, msg='添加成功'))
 
