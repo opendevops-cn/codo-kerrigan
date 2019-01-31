@@ -42,6 +42,7 @@ def check_permissions(nickname):
 class ProjectHandler(BaseHandler):
     def get(self, *args, **kwargs):
         key = self.get_argument('key', default=None, strip=True)
+        limit = self.get_argument('limit', default=50, strip=True)
         nickname = self.get_current_nickname()
         project_list = []
         the_project_list = []
@@ -51,7 +52,7 @@ class ProjectHandler(BaseHandler):
                     or_(KerriganProject.project_name.like('%{}%'.format(key)),
                         KerriganProject.project_code.like('%{}%'.format(key)))).all()
             else:
-                project_info = session.query(KerriganProject).all()
+                project_info = session.query(KerriganProject).limit(int(limit))
 
         the_pro_env_list, the_pro_per_dict = check_permissions(nickname)
         for p in the_pro_env_list:
@@ -108,7 +109,7 @@ class ProjectTreeHandler(BaseHandler):
             config_info = session.query(KerriganConfig).filter(KerriganConfig.project_code == project_code,
                                                                KerriganConfig.is_deleted == False).all()
             project_info = session.query(KerriganProject.project_name).filter(
-                KerriganConfig.project_code == project_code).first()
+                KerriganProject.project_code == project_code).first()
 
         the_pro_env_list, the_pro_per_dict = check_permissions(nickname)
 
@@ -610,7 +611,7 @@ class PublishConfigHandler(BaseHandler):
             return self.write(dict(code=-1, msg='关键参数不能为空'))
 
         the_pro_env_list, the_pro_per_dict = check_permissions(self.get_current_nickname())
-        if not self.is_superuser:
+        if not self.is_superuser or not environment == 'public':
             if not the_pro_per_dict.get(project_code):
                 if "{}/{}".format(project_code, environment) not in the_pro_env_list:
                     return self.write(dict(code=-2, msg='没有权限'))
