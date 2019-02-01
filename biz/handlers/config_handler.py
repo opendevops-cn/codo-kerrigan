@@ -8,7 +8,7 @@ Desc    : api
 """
 import json
 from libs.base_handler import BaseHandler
-from models.models import KerriganProject, KerriganConfig, KerriganHistory, KerriganPublish, KerriganPermissions, \
+from models.kerrigan import KerriganProject, KerriganConfig, KerriganHistory, KerriganPublish, KerriganPermissions, \
     model_to_dict
 from sqlalchemy import or_
 from websdk.db_context import DBContext

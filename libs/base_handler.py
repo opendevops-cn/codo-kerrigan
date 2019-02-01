@@ -13,16 +13,15 @@ class BaseHandler(SDKBaseHandler):
         self.nickname = None
         self.is_super = False
         self.is_superuser = self.is_super
-
         super(BaseHandler, self).__init__(*args, **kwargs)
 
     def prepare(self):
         ### 登陆验证
         auth_key = self.get_cookie('auth_key', None)
+        self.xsrf_token
         if not auth_key:
             # 没登录，就让跳到登陆页面
             raise HTTPError(401, 'auth failed 1')
-
         else:
             user_info = jwt.decode(auth_key, verify=False).get('data')
             self.user_id = user_info.get('user_id', None)

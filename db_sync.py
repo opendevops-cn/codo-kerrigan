@@ -7,7 +7,7 @@ Date    : 2018/12/24
 Desc    : 
 """
 
-from models.models import Base
+from models.kerrigan import Base
 from websdk.consts import const
 from settings import settings as app_settings
 # ORM创建表结构
