@@ -12,6 +12,7 @@ from models.models import KerriganProject, KerriganConfig, KerriganHistory, Kerr
     model_to_dict
 from sqlalchemy import or_
 from websdk.db_context import DBContext
+from websdk.base_handler import LivenessProbe
 import difflib
 
 
@@ -611,7 +612,7 @@ class PublishConfigHandler(BaseHandler):
             return self.write(dict(code=-1, msg='关键参数不能为空'))
 
         the_pro_env_list, the_pro_per_dict = check_permissions(self.get_current_nickname())
-        if not self.is_superuser or not environment == 'public':
+        if not self.is_superuser and not environment == 'public':
             if not the_pro_per_dict.get(project_code):
                 if "{}/{}".format(project_code, environment) not in the_pro_env_list:
                     return self.write(dict(code=-2, msg='没有权限'))
@@ -640,6 +641,7 @@ config_urls = [
     (r"/v1/conf/permissions/", PermissionsHandler),
     (r"/v1/conf/publish/service/", PublishServiceHandler),
     (r"/v1/conf/publish/config/", PublishConfigHandler),
+    (r"/are_you_ok/", LivenessProbe),
 ]
 if __name__ == "__main__":
     pass
