@@ -4,7 +4,7 @@
 
 #### 创建数据库
 ```sql
-create database `codo-kerrigan` default character set utf8mb4 collate utf8mb4_unicode_ci;
+create database `codo_kerrigan` default character set utf8mb4 collate utf8mb4_unicode_ci;
 ```
 - 初始化表结构
 ```bash

@@ -8,11 +8,6 @@ from websdk.base_handler import BaseHandler as SDKBaseHandler
 
 class BaseHandler(SDKBaseHandler):
     def __init__(self, *args, **kwargs):
-        self.user_id = None
-        self.username = None
-        self.nickname = None
-        self.is_super = False
-        self.is_superuser = self.is_super
         super(BaseHandler, self).__init__(*args, **kwargs)
 
     def prepare(self):
