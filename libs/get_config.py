@@ -75,7 +75,7 @@ class ConfApi:
             dir_name, _ = os.path.split(config_file)
             if not os.path.exists(dir_name):
                 os.makedirs(dir_name)
-            with open(config_file ,'a+') as f:
+            with open(config_file ,'w') as f:
                 f.write(v)
             print('config file path is {}'.format(config_file))
         print('success')
@@ -92,7 +92,7 @@ class ConfApi:
             dir_name, _ = os.path.split(config_file)
             if not os.path.exists(dir_name):
                 os.makedirs(dir_name)
-            with open(config_file ,'a+') as f:
+            with open(config_file ,'w') as f:
                 f.write(v)
             print('config file path is {}'.format(config_file))
         print('success')
@@ -105,7 +105,7 @@ class ConfApi:
             dir_name, _ = os.path.split(config_file)
             if not os.path.exists(dir_name):
                 os.makedirs(dir_name)
-            with open(config_file ,'a+') as f:
+            with open(config_file ,'w') as f:
                 f.write(v)
             print('config file path is {}'.format(config_file))
         print('success')
