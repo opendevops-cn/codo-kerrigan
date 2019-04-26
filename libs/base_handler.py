@@ -11,13 +11,15 @@ class BaseHandler(SDKBaseHandler):
         super(BaseHandler, self).__init__(*args, **kwargs)
 
     def prepare(self):
+        self.xsrf_token
+
         ### 登陆验证
         auth_key = self.get_cookie('auth_key', None)
         if not auth_key:
             url_auth_key = self.get_argument('auth_key', default=None, strip=True)
-            auth_key = bytes(url_auth_key, encoding='utf-8')
+            if url_auth_key:
+                auth_key = bytes(url_auth_key, encoding='utf-8')
 
-        self.xsrf_token
         if not auth_key:
             # 没登录，就让跳到登陆页面
             raise HTTPError(401, 'auth failed 1')
