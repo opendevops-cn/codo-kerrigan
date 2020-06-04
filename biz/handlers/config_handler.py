@@ -326,7 +326,7 @@ class ConfigurationHandler(BaseHandler):
             return self.write(dict(code=-1, msg='关键参数不能为空'))
 
         with DBContext('w', None, True) as session:
-            session.query(KerriganConfig).update({KerriganConfig.is_published: True})
+            session.query(KerriganConfig).filter(KerriganConfig.id == config_id).update({KerriganConfig.is_published: True})
             config_info = session.query(KerriganConfig).filter(KerriganConfig.id == config_id).first()
 
             config_key = "/{}/{}/{}/{}".format(config_info.project_code, config_info.environment, config_info.service,
