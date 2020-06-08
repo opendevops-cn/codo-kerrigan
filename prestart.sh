@@ -1,6 +1,5 @@
 #!/bin/sh
 cd /var/www/kerrigan/
-source doc/env.sh
 
 sed -i "s#cookie_secret = .*#cookie_secret = '${cookie_secret}'#g" settings.py && \
      DEFAULT_DB_DBNAME='codo_kerrigan' && \
