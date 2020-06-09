@@ -28,3 +28,14 @@ services:
     - "3306:3306"
     networks:
       - codo
+#  codo-init-mysql:
+#    env_file:
+#      - doc/env.sh
+#    restart: unless-stopped
+#    image: webuni/mycli
+#    volumes:
+#      - ./data.sql:/docker-entrypoint-initdb.d/data.sql
+#    ports:
+#    - "3306:3306"
+#    networks:
+#      - codo
