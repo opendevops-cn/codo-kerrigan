@@ -34,7 +34,7 @@ services:
 #    restart: unless-stopped
 #    image: webuni/mycli
 #    volumes:
-#      - ./data.sql:/docker-entrypoint-initdb.d/data.sql
+#      - ../data.sql:/docker-entrypoint-initdb.d/data.sql
 #    ports:
 #    - "3306:3306"
 #    networks:
