@@ -3,7 +3,7 @@ FROM registry.cn-hangzhou.aliyuncs.com/sourcegarden/python:centos7-3.6
 ENV cookie_secret nJ2oZis0V/xlArY2rzpIE6ioC9/KlqR2fd59sD=UXZJ=3OeROB
 
 RUN mkdir -p /var/www/
-ADD . /var/www/kerrigan/
+ADD ../  /var/www/kerrigan/
 
 RUN pip3 install -r /var/www/kerrigan/doc/requirements.txt
 
@@ -11,8 +11,8 @@ RUN pip3 install -r /var/www/kerrigan/doc/requirements.txt
 
 VOLUME /var/log/
 
-COPY doc/nginx_ops.conf /etc/nginx/conf.d/default.conf
-COPY doc/supervisor_ops.conf  /etc/supervisord.conf
+COPY nginx_ops.conf /etc/nginx/conf.d/default.conf
+COPY supervisor_ops.conf  /etc/supervisord.conf
 
 EXPOSE 80
 CMD ["/usr/bin/supervisord"]

@@ -4,7 +4,7 @@ networks:
 services:
   codo-kerrigan:
     env_file:
-      - doc/env.sh
+      - ./env.sh
     restart: unless-stopped
     image: registry.cn-hangzhou.aliyuncs.com/sourcegarden/opendevops-kerrigan:alpine-0.3.0
     volumes:
@@ -17,11 +17,11 @@ services:
       - codo
   codo-mysql:
     env_file:
-      - doc/env.sh
+      - ./env.sh
     restart: unless-stopped
     image: mysql:5.7
     volumes:
-      - ./data.sql:/docker-entrypoint-initdb.d/data.sql
+      - ../data.sql:/docker-entrypoint-initdb.d/data.sql
       - /data/mysql:/var/lib/mysql
       - /data/mysql_conf:/etc/mysql/conf.d
     ports:
