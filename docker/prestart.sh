@@ -14,4 +14,17 @@ sed -i "s#cookie_secret = .*#cookie_secret = '${cookie_secret}'#g" settings.py &
      sed -i "s#READONLY_DB_DBPWD = .*#READONLY_DB_DBPWD = os.getenv('READONLY_DB_DBPWD', '${READONLY_DB_DBPWD}')#g" settings.py && \
      sed -i "s#READONLY_DB_DBNAME = .*#READONLY_DB_DBNAME = os.getenv('READONLY_DB_DBNAME', '${DEFAULT_DB_DBNAME}')#g" settings.py
 
-#python3 /var/www/kerrigan/db_sync.py
+
+try_num=0
+
+while [[ $try_num -le 100 ]];
+do
+     if $(curl  -s ${DEFAULT_DB_DBHOST}:${DEFAULT_DB_DBPORT}  > /dev/null);then
+          python3 db_sync.py
+          exit 0
+     else
+          echo 'wait mysql start to do db_sync.db'
+     fi
+     let try_num+=1
+     sleep 6
+done

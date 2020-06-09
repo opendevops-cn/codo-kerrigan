@@ -9,7 +9,7 @@ services:
     hostname: codo-mysql
     image: mysql:5.7
     volumes:
-      - ../data.sql:/docker-entrypoint-initdb.d/create_database.sql
+      - ../create_database.sql:/docker-entrypoint-initdb.d/create_database.sql
       - ../codo_admin_beta0.3.sql:/docker-entrypoint-initdb.d/codo_admin_beta0.3.sql
       - /data/mysql:/var/lib/mysql
       - /data/mysql_conf:/etc/mysql/conf.d
@@ -46,6 +46,7 @@ services:
     env_file:
       - ./env.sh
     restart: unless-stopped
+    hostname: codo-admin
     image: registry.cn-hangzhou.aliyuncs.com/sourcegarden/opendevops-admin:alpine-0.3.0
     volumes:
       - /var/log/supervisor/:/var/log/supervisor/
