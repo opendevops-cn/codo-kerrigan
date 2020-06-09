@@ -2,26 +2,15 @@ version: "3.8"
 networks:
     codo:
 services:
-  codo-kerrigan:
-    env_file:
-      - ./env.sh
-    restart: unless-stopped
-    image: registry.cn-hangzhou.aliyuncs.com/sourcegarden/opendevops-kerrigan:alpine-0.3.0
-    volumes:
-      - /var/log/supervisor/:/var/log/supervisor/
-      - /opt/ops_scripts:/opt/ops_scripts
-      - /sys/fs/cgroup:/sys/fs/cgroup
-    ports:
-      - "8030:80"
-    networks:
-      - codo
   codo-mysql:
     env_file:
       - ./env.sh
     restart: unless-stopped
+    hostname: codo-mysql
     image: mysql:5.7
     volumes:
-      - ../data.sql:/docker-entrypoint-initdb.d/data.sql
+      - ../data.sql:/docker-entrypoint-initdb.d/create_database.sql
+      - ../codo_admin_beta0.3.sql:/docker-entrypoint-initdb.d/codo_admin_beta0.3.sql
       - /data/mysql:/var/lib/mysql
       - /data/mysql_conf:/etc/mysql/conf.d
     ports:
@@ -39,3 +28,29 @@ services:
 #    - "3306:3306"
 #    networks:
 #      - codo
+  codo-kerrigan:
+    env_file:
+      - ./env.sh
+    restart: unless-stopped
+    hostname: codo-kerrigan
+    image: registry.cn-hangzhou.aliyuncs.com/sourcegarden/opendevops-kerrigan:alpine-0.3.0
+    volumes:
+      - /var/log/supervisor/:/var/log/supervisor/
+      - /opt/ops_scripts:/opt/ops_scripts
+      - /sys/fs/cgroup:/sys/fs/cgroup
+    ports:
+      - "8030:80"
+    networks:
+      - codo
+  codo-admin:
+    env_file:
+      - ./env.sh
+    restart: unless-stopped
+    image: registry.cn-hangzhou.aliyuncs.com/sourcegarden/opendevops-admin:alpine-0.3.0
+    volumes:
+      - /var/log/supervisor/:/var/log/supervisor/
+      - /sys/fs/cgroup:/sys/fs/cgroup
+    ports:
+      - "8010:80"
+    networks:
+      - codo

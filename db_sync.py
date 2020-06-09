@@ -4,7 +4,7 @@
 Contact : 191715030@qq.com
 Author  : shenshuo
 Date    : 2018/12/24
-Desc    : 
+Desc    :
 """
 
 from models.kerrigan import Base

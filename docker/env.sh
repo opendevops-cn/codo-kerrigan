@@ -1,8 +1,8 @@
-#本机的IP地址
-LOCALHOST_IP="127.0.0.1"
-
 # 设置MYSQL root用户密码,若你只打算启动mysql,那么此变量是必须的,其余的都可以不需要
 MYSQL_ROOT_PASSWORD="m9uSFL7duAVXfeAwGUSGroot"
+
+#本机的IP地址
+LOCALHOST_IP="127.0.0.1"
 
 #设置你的MYSQL密码
 MYSQL_PASSWORD="${MYSQL_ROOT_PASSWORD}"
