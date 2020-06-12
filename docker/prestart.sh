@@ -23,7 +23,7 @@ do
           python3 db_sync.py
           exit 0
      else
-          echo 'wait mysql start to do db_sync.db'
+          echo 'wait mysql start to do db_sync.py'
      fi
      let try_num+=1
      sleep 6

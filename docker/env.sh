@@ -10,12 +10,17 @@ MYSQL_PASSWORD="${MYSQL_ROOT_PASSWORD}"
 ### 设置你的redis密码
 REDIS_PASSWORD="cWCVKJ7ZHUK12mVbivUf"
 
-### RabbitMQ用户密码信息
+### 应用连接RabbitMQ需要的用户密码信息
 MQ_USER="ss"
 MQ_PASSWORD="5Q2ajBHRT2lFJjnvaU0g"
 
+### Rabbit MQ容器启动时候的环境变量
+RABBITMQ_DEFAULT_USER=${MQ_USER}
+RABBITMQ_DEFAULT_PASS=${MQ_PASSWORD}
+
+
 ### 管理后端地址
-mg_domain="codo-mg"
+mg_domain="codo-admin"
 
 ### 定时任务地址,目前只启动一个进程，不用域名，直接IP即可
 cron_domain="codo-cron"
@@ -38,10 +43,10 @@ dns_domain="codo-dns"
 kerrigan_domain="codo-kerrigan"
 
 ### 前端地址,也就是你的访问地址
-front_domain="codo-front"
+front_domain="codo-frontend"
 
 ### api网关地址
-api_gw_url="codo-gw"
+api_gw_url="codo-gateway"
 
 
 #codo-admin用到的cookie和token，可留默认
@@ -66,7 +71,7 @@ READONLY_DB_DBPWD=${MYSQL_PASSWORD}
 #READONLY_DB_DBNAME=${mysql_database}
 
 # 消息队列
-DEFAULT_MQ_ADDR='codo-mq'
+DEFAULT_MQ_ADDR='codo-rabbitmq'
 DEFAULT_MQ_USER=${MQ_USER}
 DEFAULT_MQ_PWD=${MQ_PASSWORD}
 
