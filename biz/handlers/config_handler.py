@@ -12,9 +12,9 @@ from libs.base_handler import BaseHandler
 from libs.etcd import Etcd3Client
 from models.kerrigan import KerriganProject, KerriganConfig, KerriganHistory, KerriganPublish, KerriganPermissions
 from sqlalchemy import or_
-from websdk.model_utils import model_to_dict
-from websdk.db_context import DBContextV2 as DBContext
-from websdk.base_handler import LivenessProbe
+from websdk2.model_utils import model_to_dict
+from websdk2.db_context import DBContextV2 as DBContext
+from websdk2.base_handler import LivenessProbe
 import difflib
 
 

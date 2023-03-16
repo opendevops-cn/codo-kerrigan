@@ -6,7 +6,7 @@ date   : 2017-10-11
 role   : Application
 """
 
-from websdk.application import Application as myApplication
+from websdk2.application import Application as myApplication
 from biz.handlers.config_handler import config_urls
 
 

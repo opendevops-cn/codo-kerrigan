@@ -8,7 +8,7 @@ Desc    :
 """
 
 from models.kerrigan import Base
-from websdk.consts import const
+from websdk2.consts import const
 from settings import settings as app_settings
 # ORM创建表结构
 from sqlalchemy import create_engine

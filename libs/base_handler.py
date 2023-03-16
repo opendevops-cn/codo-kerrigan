@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*-coding:utf-8-*-
 
-from websdk.base_handler import BaseHandler as SDKBaseHandler
+from websdk2.base_handler import BaseHandler as SDKBaseHandler
 
 
 class BaseHandler(SDKBaseHandler):

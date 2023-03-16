@@ -1,21 +1,27 @@
-FROM centos:7
+FROM rockylinux:9.1
+
+MAINTAINER "shenshuo<191715030@qq.com>"
 # 设置编码
-ENV LANG en_US.UTF-8
+ENV LANG C.UTF-8
+
 # 同步时间
 ENV TZ=Asia/Shanghai
-RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
-RUN yum install -y bind-utils python3 git
+RUN yum install -y python3 python3-pip git && \
+    yum clean all
+
 # 3. 安装pip依赖
 RUN pip3 install --upgrade pip
-RUN pip3 install -U git+https://github.com/ss1917/ops_sdk.git
+RUN pip3 install -U git+https://github.com/ss1917/codo_sdk.git
 
-#### 以上python3.6通用
+#### 以上python3.9通用
 ARG SERVICE_NAME
 ENV SERVICE_NAME=${SERVICE_NAME}
 
 WORKDIR /data
 COPY . .
+
+# RUN python3 db_sync.py  &> /dev/null
 
 RUN pip3 install -r docs/requirements.txt &> /dev/null && \
     chmod -R a+x /data/run-py.sh
@@ -23,4 +29,5 @@ RUN pip3 install -r docs/requirements.txt &> /dev/null && \
 EXPOSE 8000
 CMD /data/run-py.sh ${SERVICE_NAME}
 
+### docker build --no-cache --build-arg SERVICE_NAME=kerrigan . -t codo_kerrigan_image
 ### docker build --build-arg SERVICE_NAME=kerrigan . -t kerrigan_image

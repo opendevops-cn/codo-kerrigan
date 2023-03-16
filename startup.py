@@ -9,7 +9,7 @@ Desc    : 启动文件
 
 import fire
 from tornado.options import define
-from websdk.program import MainProgram
+from websdk2.program import MainProgram
 from settings import settings as app_settings
 from biz.applications import Application as config_api
 

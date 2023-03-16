@@ -8,7 +8,7 @@ Desc    : 配置文件
 """
 
 import os
-from websdk.consts import const
+from websdk2.consts import const
 ROOT_DIR = os.path.dirname(__file__)
 debug = True
 xsrf_cookies = True

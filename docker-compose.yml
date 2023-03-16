@@ -1,8 +1,13 @@
-codo-kerrigan:
-  restart: unless-stopped
-  image: kerrigan_image
-  volumes:
-    - /var/log/supervisor/:/var/log/supervisor/
-    - /sys/fs/cgroup:/sys/fs/cgroup
-  ports:
-    - "8030:8000"
+version: '3'
+networks:
+  codo:
+services:
+  codo-kerrigan:
+    restart: unless-stopped
+    image: codo_kerrigan_image
+    networks:
+      - codo
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup
+    ports:
+      - "8030:8000"
