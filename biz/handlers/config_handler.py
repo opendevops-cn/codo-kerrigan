@@ -4,7 +4,7 @@
 Contact : 191715030@qq.com
 Author  : shenshuo
 Date    : 2019/1/21
-Desc    : api
+Desc    : 配置管理 API
 """
 
 import json
@@ -48,7 +48,7 @@ class ProjectHandler(BaseHandler):
         limit = self.get_argument('limit', default='100', strip=True)
         is_archive = self.get_argument('is_archive', default='false', strip=True)
         is_archive = False if is_archive == 'false' else True
-        nickname = self.get_current_nickname()
+        nickname = f'{self.request_username}({self.request_nickname})'
         project_list = []
         with DBContext('r') as session:
             if key:
@@ -93,7 +93,7 @@ class ProjectHandler(BaseHandler):
         if check_contain_chinese(project_code):  return self.write(dict(code=-1, msg='项目代号或者英文名称不能有汉字'))
         if '/' in project_name:  return self.write(dict(code=-3, msg='项目名称不能包含 /'))
 
-        nickname = self.get_current_nickname()
+        nickname = f'{self.request_username}({self.request_nickname})'
         with DBContext('w', None, True) as session:
             is_exist = session.query(KerriganProject.project_id).filter(
                 KerriganProject.project_code == project_code).first()
@@ -102,7 +102,7 @@ class ProjectHandler(BaseHandler):
 
             session.add(KerriganProject(project_name=project_name, project_code=project_code, create_user=nickname))
             session.add(KerriganPermissions(project_code=project_code, environment='all_env',
-                                            nickname=self.get_current_nickname(), is_admin=True))
+                                            nickname=nickname, is_admin=True))
 
         self.write(dict(code=0, msg='添加成功'))
 
@@ -120,7 +120,8 @@ class ProjectHandler(BaseHandler):
         etcd_conf = data.get('etcd_conf')
         ###
 
-        _, the_pro_per_dict = check_permissions(self.get_current_nickname())
+        nickname = f'{self.request_username}({self.request_nickname})'
+        _, the_pro_per_dict = check_permissions(nickname)
         if not self.is_superuser and not the_pro_per_dict.get(project_code):
             return self.write(dict(code=-1, msg='没有权限'))
 
@@ -146,7 +147,7 @@ class ProjectHandler(BaseHandler):
 class ProjectTreeHandler(BaseHandler):
     def get(self, *args, **kwargs):
         project_code = self.get_argument('project_code', default=None, strip=True)
-        nickname = self.get_current_nickname()
+        nickname = f'{self.request_username}({self.request_nickname})'
         if not project_code:
             return self.write(dict(code=-1, msg='关键参数不能为空'))
 
@@ -234,27 +235,26 @@ class ConfigurationHandler(BaseHandler):
         if not project_code or not environment or not service or not filename:
             return self.write(dict(code=-1, msg='关键参数不能为空'))
 
-        the_pro_env_list, the_pro_per_dict = check_permissions(self.get_current_nickname())
+        nickname = f'{self.request_username}({self.request_nickname})'
+        the_pro_env_list, the_pro_per_dict = check_permissions(nickname)
         if not self.is_superuser:
             if not the_pro_per_dict.get(project_code):
                 if "{}/{}".format(project_code, environment) not in the_pro_env_list:
                     return self.write(dict(code=-2, msg='没有权限'))
 
         with DBContext('r') as session:
-
             conf_info = session.query(KerriganConfig).filter(KerriganConfig.project_code == project_code,
                                                              KerriganConfig.environment == environment,
                                                              KerriganConfig.service == service,
                                                              KerriganConfig.filename == filename,
                                                              KerriganConfig.is_deleted == False).first()
-        if not conf_info:
-            return self.write(dict(code=-3, msg='没有数据', data=dict(content='')))
+            if not conf_info:  return self.write(dict(code=-3, msg='没有数据', data=dict(content='')))
 
         config_key = "/{}/{}/{}/{}".format(conf_info.project_code, conf_info.environment, conf_info.service,
                                            conf_info.filename)
 
         return self.write(dict(code=0, msg='获取成功', data=dict(config_key=config_key, content=conf_info.content,
-                                                             is_published=conf_info.is_published)))
+                                                                 is_published=conf_info.is_published)))
 
     ### 添加
     def post(self, *args, **kwargs):
@@ -277,7 +277,8 @@ class ConfigurationHandler(BaseHandler):
             return self.write(dict(code=-1, msg='环境名称不合法'))
 
         ### 鉴权
-        the_pro_env_list, the_pro_per_dict = check_permissions(self.get_current_nickname())
+        nickname = f'{self.request_username}({self.request_nickname})'
+        the_pro_env_list, the_pro_per_dict = check_permissions(nickname)
         if not self.is_superuser:
             if not the_pro_per_dict.get(project_code):
                 return self.write(dict(code=-2, msg='没有添加权限'))
@@ -321,7 +322,8 @@ class ConfigurationHandler(BaseHandler):
             return self.write(dict(code=-1, msg='关键参数不能为空'))
 
         ### 鉴权
-        the_pro_env_list, the_pro_per_dict = check_permissions(self.get_current_nickname())
+        nickname = f'{self.request_username}({self.request_nickname})'
+        the_pro_env_list, the_pro_per_dict = check_permissions(nickname)
         if not self.is_superuser:
             if not the_pro_per_dict.get(project_code):
                 if "{}/{}".format(project_code, environment) not in the_pro_env_list:
@@ -349,7 +351,8 @@ class ConfigurationHandler(BaseHandler):
             return self.write(dict(code=-1, msg='关键参数不能为空'))
 
         ### 鉴权
-        the_pro_env_list, the_pro_per_dict = check_permissions(self.get_current_nickname())
+        nickname = f'{self.request_username}({self.request_nickname})'
+        the_pro_env_list, the_pro_per_dict = check_permissions(nickname)
         ### 不是超级管理员  也不是管理员的 没有删除权限
 
         if not self.is_superuser:
@@ -368,6 +371,7 @@ class ConfigurationHandler(BaseHandler):
     def patch(self, *args, **kwargs):
         data = json.loads(self.request.body.decode("utf-8"))
         config_id = data.get('config_id')
+        nickname = f'{self.request_username}({self.request_nickname})'
         if not config_id: return self.write(dict(code=-1, msg='关键参数不能为空'))
 
         with DBContext('w', None, True) as session:
@@ -380,22 +384,19 @@ class ConfigurationHandler(BaseHandler):
             publish = session.query(KerriganPublish.id).filter(KerriganPublish.config == config_key).first()
 
             ### 鉴权
-            the_pro_env_list, the_pro_per_dict = check_permissions(self.get_current_nickname())
+            the_pro_env_list, the_pro_per_dict = check_permissions(nickname)
 
             if not self.is_superuser:
                 if not the_pro_per_dict.get(config_info.project_code):
                     return self.write(dict(code=-2, msg='不是管理员 没有发布权限', data=dict(content='')))
 
             if not publish:
-                session.add(KerriganPublish(config=config_key, content=config_info.content,
-                                            create_user=self.get_current_nickname()))
+                session.add(KerriganPublish(config=config_key, content=config_info.content, create_user=nickname))
             else:
                 session.query(KerriganPublish).filter(KerriganPublish.config == config_key).update(
-                    {KerriganPublish.content: config_info.content,
-                     KerriganConfig.create_user: self.get_current_nickname()})
+                    {KerriganPublish.content: config_info.content, KerriganConfig.create_user: nickname})
 
-            session.add(KerriganHistory(config=config_key, content=config_info.content,
-                                        create_user=self.get_current_nickname()))
+            session.add(KerriganHistory(config=config_key, content=config_info.content, create_user=nickname))
 
             project_code = config_info.project_code
             project_info = session.query(KerriganProject).filter(KerriganProject.project_code == project_code).first()
@@ -423,11 +424,12 @@ class HistoryConfigHandler(BaseHandler):
         environment = self.get_argument('environment', default=None, strip=True)
         service = self.get_argument('service', default=None, strip=True)
         filename = self.get_argument('filename', default=None, strip=True)
+        nickname = f'{self.request_username}({self.request_nickname})'
         if not project_code or not environment or not service or not filename:
             return self.write(dict(code=-1, msg='关键参数不能为空'))
 
         ### 鉴权
-        the_pro_env_list, the_pro_per_dict = check_permissions(self.get_current_nickname())
+        the_pro_env_list, the_pro_per_dict = check_permissions(nickname)
         if not self.is_superuser:
             if not the_pro_per_dict.get(project_code):
                 if "{}/{}".format(project_code, environment) not in the_pro_env_list:
@@ -459,7 +461,8 @@ class HistoryConfigHandler(BaseHandler):
         filename = conf_info_config[4]
 
         ### 鉴权
-        the_pro_env_list, the_pro_per_dict = check_permissions(self.get_current_nickname())
+        nickname = f'{self.request_username}({self.request_nickname})'
+        the_pro_env_list, the_pro_per_dict = check_permissions(nickname)
         if not self.is_superuser:
             if not the_pro_per_dict.get(project_code):
                 if "{}/{}".format(project_code, environment) not in the_pro_env_list:
@@ -516,7 +519,7 @@ class PermissionsHandler(BaseHandler):
         user_list = []
         admin_list = []
 
-        nickname = self.get_current_nickname()
+        nickname = f'{self.request_username}({self.request_nickname})'
         if not project_code or not environment:
             return self.write(dict(code=-1, msg='关键参数不能为空'))
 
@@ -646,7 +649,8 @@ class PublishServiceHandler(BaseHandler):
         if not project_code or not environment or not service:
             return self.write(dict(code=-1, msg='关键参数不能为空'))
 
-        the_pro_env_list, the_pro_per_dict = check_permissions(self.get_current_nickname())
+        nickname = f'{self.request_username}({self.request_nickname})'
+        the_pro_env_list, the_pro_per_dict = check_permissions(nickname)
         if not self.is_superuser:
             if not the_pro_per_dict.get(project_code):
                 if "{}/{}".format(project_code, environment) not in the_pro_env_list:
@@ -675,7 +679,8 @@ class PublishConfigHandler(BaseHandler):
         if not project_code or not environment or not service or not filename:
             return self.write(dict(code=-1, msg='关键参数不能为空'))
 
-        the_pro_env_list, the_pro_per_dict = check_permissions(self.get_current_nickname())
+        nickname = f'{self.request_username}({self.request_nickname})'
+        the_pro_env_list, the_pro_per_dict = check_permissions(nickname)
         if not self.is_superuser and not environment == 'public':
             if not the_pro_per_dict.get(project_code):
                 if "{}/{}".format(project_code, environment) not in the_pro_env_list:
