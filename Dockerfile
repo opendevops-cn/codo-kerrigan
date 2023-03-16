@@ -30,4 +30,4 @@ EXPOSE 8000
 CMD /data/run-py.sh ${SERVICE_NAME}
 
 ### docker build --no-cache --build-arg SERVICE_NAME=kerrigan . -t codo_kerrigan_image
-### docker build --build-arg SERVICE_NAME=kerrigan . -t kerrigan_image
+### docker build --build-arg SERVICE_NAME=kerrigan . -t codo_kerrigan_image

@@ -30,8 +30,8 @@ READONLY_DB_DBNAME = os.getenv('READONLY_DB_DBNAME', 'codo_kerrigan')
 
 try:
     from local_settings import *
-except:
-    pass
+except ImportError:
+    print('local_settings.py  No Found.')
 
 settings = dict(
     debug=debug,
