@@ -15,6 +15,7 @@ from biz.applications import Application as configApi
 
 define("service", default='api', help="start service flag", type=str)
 
+
 class MyProgram(MainProgram):
     def __init__(self, progress_id='config'):
         self.__app = None
@@ -27,4 +28,4 @@ class MyProgram(MainProgram):
 if __name__ == '__main__':
     fire.Fire(MyProgram)
 
-### python3 startup.py --service=kerrigan --port=8030
+# python3 startup.py --service=kerrigan --port=8030

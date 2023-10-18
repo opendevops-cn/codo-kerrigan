@@ -8,6 +8,7 @@ Desc    : 配置管理 API
 """
 
 import json
+import difflib
 from libs.base_handler import BaseHandler
 from libs.etcd import Etcd3Client
 from models.kerrigan import KerriganProject, KerriganConfig, KerriganHistory, KerriganPublish, KerriganPermissions
@@ -15,7 +16,6 @@ from sqlalchemy import or_
 from websdk2.model_utils import model_to_dict
 from websdk2.db_context import DBContextV2 as DBContext
 from websdk2.base_handler import LivenessProbe
-import difflib
 
 
 def check_contain_chinese(check_str):
@@ -701,14 +701,14 @@ class PublishConfigHandler(BaseHandler):
 
 
 config_urls = [
-    (r"/v1/conf/project/", ProjectHandler),
-    (r"/v1/conf/config/", ConfigurationHandler),
-    (r"/v1/conf/tree/", ProjectTreeHandler),
-    (r"/v1/conf/history/", HistoryConfigHandler),
-    (r"/v1/conf/diff/", DiffConfigHandler),
-    (r"/v1/conf/permissions/", PermissionsHandler),
-    (r"/v1/conf/publish/service/", PublishServiceHandler),
-    (r"/v1/conf/publish/config/", PublishConfigHandler),
+    (r"/v1/conf/project/", ProjectHandler, {"handle_name": "配置中心-项目管理", "method": ["ALL"]}),
+    (r"/v1/conf/config/", ConfigurationHandler, {"handle_name": "配置中心-配置管理", "method": ["ALL"]}),
+    (r"/v1/conf/tree/", ProjectTreeHandler, {"handle_name": "配置中心-配置树", "method": ["ALL"]}),
+    (r"/v1/conf/history/", HistoryConfigHandler, {"handle_name": "配置中心-变更历史", "method": ["ALL"]}),
+    (r"/v1/conf/diff/", DiffConfigHandler, {"handle_name": "配置中心-对比", "method": ["ALL"]}),
+    (r"/v1/conf/permissions/", PermissionsHandler, {"handle_name": "配置中心-授权", "method": ["ALL"]}),
+    (r"/v1/conf/publish/service/", PublishServiceHandler, {"handle_name": "配置中心-服务配置集", "method": ["ALL"]}),
+    (r"/v1/conf/publish/config/", PublishConfigHandler, {"handle_name": "配置中心-线上配置", "method": ["ALL"]}),
     (r"/are_you_ok/", LivenessProbe),
 ]
 if __name__ == "__main__":
