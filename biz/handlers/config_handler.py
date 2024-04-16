@@ -12,136 +12,42 @@ import difflib
 from libs.base_handler import BaseHandler
 from libs.etcd import Etcd3Client
 from models.kerrigan import KerriganProject, KerriganConfig, KerriganHistory, KerriganPublish, KerriganPermissions
-from sqlalchemy import or_
 from websdk2.model_utils import model_to_dict
 from websdk2.db_context import DBContextV2 as DBContext
 from websdk2.base_handler import LivenessProbe
-
-
-def check_contain_chinese(check_str):
-    for ch in check_str:
-        if u'\u4e00' <= ch <= u'\u9fff':
-            return True
-    return False
-
-
-def check_permissions(nickname):
-    the_project_list = []
-    the_pro_env_list = []
-    is_admin = False
-    the_pro_per_dict = {}
-    with DBContext('r') as session:
-        the_project = session.query(KerriganPermissions).filter(KerriganPermissions.nickname == nickname).all()
-
-    for msg in the_project:
-        data_dict = model_to_dict(msg)
-        the_project_list.append(data_dict['project_code'])
-        the_pro_env_list.append("{}/{}".format(data_dict['project_code'], data_dict['environment']))
-        is_admin = data_dict['is_admin'] if data_dict['is_admin'] else is_admin
-        the_pro_per_dict[data_dict['project_code']] = data_dict['is_admin']
-    return the_pro_env_list, the_pro_per_dict
+from services.conf_service import check_contain_chinese, get_project_list_for_api, add_project_for_api, \
+    put_project_for_api, edit_project_etcd_for_api, check_permissions, put_etcd
 
 
 class ProjectHandler(BaseHandler):
     def get(self, *args, **kwargs):
         key = self.get_argument('key', default=None, strip=True)
-        limit = self.get_argument('limit', default='100', strip=True)
+        limit = self.get_argument('limit', default=100, strip=True)
         is_archive = self.get_argument('is_archive', default='false', strip=True)
         is_archive = False if is_archive == 'false' else True
-        nickname = f'{self.request_username}({self.request_nickname})'
-        project_list = []
-        with DBContext('r') as session:
-            if key:
-                project_info = session.query(KerriganProject).filter(
-                    or_(KerriganProject.project_name.like('{}%'.format(key)),
-                        KerriganProject.project_code.like('{}%'.format(key)))).filter(
-                    KerriganProject.is_archive == is_archive).all()
-            else:
-                project_info = session.query(KerriganProject).filter(KerriganProject.is_archive == is_archive).limit(
-                    int(limit))
+        project_list = get_project_list_for_api(key, limit, is_archive, self.fullname, self.is_superuser)
 
-        the_pro_env_list, the_pro_per_dict = check_permissions(nickname)
-
-        the_project_list = [p.split('/')[0] for p in the_pro_env_list]
-        for msg in project_info:
-            data_dict = model_to_dict(msg)
-            etcd_conf = data_dict.get('etcd_conf')
-            if etcd_conf:
-                try:
-                    etcd_conf = json.loads(etcd_conf)
-                    etcd_conf['ETCD_PASSWORD'] = "*******"
-                    data_dict['etcd_conf'] = etcd_conf
-                except:
-                    pass
-
-            if not self.is_superuser:
-                if data_dict['project_code'] in the_project_list or nickname == data_dict['create_user']:
-                    project_list.append(data_dict)
-            else:
-                project_list.append(data_dict)
-
-        self.write(dict(code=0, msg='获取成功', data=project_list))
+        return self.write(dict(code=0, msg='获取成功', data=project_list))
 
     def post(self, *args, **kwargs):
         data = json.loads(self.request.body.decode("utf-8"))
         project_code = data.get('project_code')
         project_name = data.get('project_name')
 
-        if not project_name or not project_name:
-            return self.write(dict(code=-2, msg='关键参数不能为空'))
-
-        if check_contain_chinese(project_code):  return self.write(dict(code=-1, msg='项目代号或者英文名称不能有汉字'))
-        if '/' in project_name:  return self.write(dict(code=-3, msg='项目名称不能包含 /'))
-
-        nickname = f'{self.request_username}({self.request_nickname})'
-        with DBContext('w', None, True) as session:
-            is_exist = session.query(KerriganProject.project_id).filter(
-                KerriganProject.project_code == project_code).first()
-
-            if is_exist: return self.write(dict(code=-2, msg='名称不能重复'))
-
-            session.add(KerriganProject(project_name=project_name, project_code=project_code, create_user=nickname))
-            session.add(KerriganPermissions(project_code=project_code, environment='all_env',
-                                            nickname=nickname, is_admin=True))
-
-        self.write(dict(code=0, msg='添加成功'))
+        new_proj = dict(project_name=project_name, project_code=project_code, create_user=self.fullname)
+        res = add_project_for_api(new_proj)
+        return self.write(res)
 
     def put(self, *args, **kwargs):
         data = json.loads(self.request.body.decode("utf-8"))
-        project_code = data.get('project_code')
-        with DBContext('w', None, True) as session:
-            session.query(KerriganProject).filter(KerriganProject.project_code == project_code
-                                                  ).update({KerriganProject.is_archive: True})
-        self.write(dict(code=0, msg='归档成功'))
+        res = put_project_for_api(data)
+        return self.write(res)
 
     def patch(self):
         data = json.loads(self.request.body.decode("utf-8"))
-        project_code = data.get('project_code')
-        etcd_conf = data.get('etcd_conf')
-        ###
-
-        nickname = f'{self.request_username}({self.request_nickname})'
-        _, the_pro_per_dict = check_permissions(nickname)
-        if not self.is_superuser and not the_pro_per_dict.get(project_code):
-            return self.write(dict(code=-1, msg='没有权限'))
-
-        try:
-            etcd_conf = json.loads(etcd_conf)
-        except Exception as err:
-            return self.write(dict(code=-2, msg='格式不符合要求，必须可以格式化为字典的JSON字符串'))
-        ###
-        with DBContext('w', None, True) as session:
-            if etcd_conf.get('ETCD_PASSWORD') == "*******":
-                __info = session.query(KerriganProject).filter(KerriganProject.project_code == project_code).first()
-                try:
-                    __info_etcd_conf = json.loads(__info.etcd_conf)
-                    etcd_conf['ETCD_PASSWORD'] = __info_etcd_conf.get('ETCD_PASSWORD')
-                except Exception as err:
-                    pass
-            etcd_conf = json.dumps(etcd_conf)
-            session.query(KerriganProject).filter(KerriganProject.project_code == project_code).update(
-                {KerriganProject.etcd_conf: etcd_conf})
-        self.write(dict(code=0, msg='关联ETCD配置成功'))
+        data['fullname'] = self.fullname
+        res = edit_project_etcd_for_api(data)
+        return self.write(res)
 
 
 class ProjectTreeHandler(BaseHandler):
@@ -169,7 +75,7 @@ class ProjectTreeHandler(BaseHandler):
         for m in config_info:
             data_dict = model_to_dict(m)
             data_dict.pop('create_time')
-            ###如果是超级管理  或者是此项目的管理员
+            # 如果是超级管理  或者是此项目的管理员
             if self.is_superuser or the_pro_per_dict.get(project_code):
                 config_list.append(data_dict)
             ###
@@ -367,7 +273,7 @@ class ConfigurationHandler(BaseHandler):
 
         return self.write(dict(code=0, msg='删除成功'))
 
-    ### 发布
+    # 发布
     def patch(self, *args, **kwargs):
         data = json.loads(self.request.body.decode("utf-8"))
         config_id = data.get('config_id')
@@ -401,21 +307,11 @@ class ConfigurationHandler(BaseHandler):
             project_code = config_info.project_code
             project_info = session.query(KerriganProject).filter(KerriganProject.project_code == project_code).first()
             if project_info.etcd_conf:
-                the_state = self.put_etcd(project_info.etcd_conf, config_key, config_info.content)
-                if the_state is not True: return self.write(dict(code=-3, msg='发布完成，写入ETCD失败'))
+                the_state = put_etcd(project_info.etcd_conf, config_key, config_info.content)
+                if the_state is not True:
+                    return self.write(dict(code=-3, msg='发布完成，写入ETCD失败'))
 
         return self.write(dict(code=0, msg='发布成功'))
-
-    def put_etcd(self, etcd_conf, config_key, content):
-        etcd_conf = json.loads(etcd_conf)
-        client = Etcd3Client(hosts=etcd_conf.get('ETCD_HOST_PORT'), user=etcd_conf.get('ETCD_USER'),
-                             passwd=etcd_conf.get('ETCD_PASSWORD'))
-        prefix = etcd_conf.get('ETCD_PREFIX', '')
-        config_key = config_key[1:]
-        full_config_key = f'{prefix}{config_key}' if prefix else config_key
-        # print(full_config_key)
-        state = client.put(full_config_key, content)
-        return state
 
 
 class HistoryConfigHandler(BaseHandler):

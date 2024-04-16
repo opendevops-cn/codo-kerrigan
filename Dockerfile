@@ -21,13 +21,11 @@ ENV SERVICE_NAME=${SERVICE_NAME}
 WORKDIR /data
 COPY . .
 
-# RUN python3 db_sync.py  &> /dev/null
-
 RUN pip3 install -r docs/requirements.txt &> /dev/null && \
     chmod -R a+x /data/run-py.sh
 
 EXPOSE 8000
 CMD /data/run-py.sh ${SERVICE_NAME}
 
-### docker build --no-cache --build-arg SERVICE_NAME=kerrigan . -t codo_kerrigan_image
-### docker build --build-arg SERVICE_NAME=kerrigan . -t codo_kerrigan_image
+### docker build --no-cache --build-arg SERVICE_NAME=kerrigan . -t codo-kerrigan-image
+### docker build --build-arg SERVICE_NAME=kerrigan . -t codo-kerrigan-image

@@ -3,11 +3,11 @@ networks:
   codo:
 services:
   codo-kerrigan:
-    restart: unless-stopped
-    image: codo_kerrigan_image
+    image: codo-kerrigan-image
     networks:
       - codo
-    volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup
     ports:
       - "8030:8000"
+    restart: unless-stopped
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup

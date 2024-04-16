@@ -9,11 +9,12 @@ Desc    : 配置文件
 
 import os
 from websdk2.consts import const
+
 ROOT_DIR = os.path.dirname(__file__)
 debug = True
 xsrf_cookies = True
 expire_seconds = 365 * 24 * 60 * 60
-cookie_secret = '61oETzKXQAGaYdkL5gEmGeJJFuYh7EQnp2X6TP1o/Vo='
+cookie_secret = os.getenv('DEFAULT_COOKIE_SECRET', '61oETzKXQAGaYdkL5gEmGeJJFuYh7EQnp2X6TP1o/Vo=')
 
 DEFAULT_DB_DBHOST = os.getenv('DEFAULT_DB_DBHOST', '172.16.0.223')
 DEFAULT_DB_DBPORT = os.getenv('DEFAULT_DB_DBPORT', '3306')
