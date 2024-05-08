@@ -10,7 +10,7 @@ Desc    : 配置管理 API
 import json
 import difflib
 from libs.base_handler import BaseHandler
-from libs.etcd import Etcd3Client
+# from libs.etcd import Etcd3Client
 from models.kerrigan import KerriganProject, KerriganConfig, KerriganHistory, KerriganPublish, KerriganPermissions
 from websdk2.model_utils import model_to_dict
 from websdk2.db_context import DBContextV2 as DBContext

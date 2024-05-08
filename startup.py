@@ -17,7 +17,7 @@ define("service", default='api', help="start service flag", type=str)
 
 
 class MyProgram(MainProgram):
-    def __init__(self, progress_id='config'):
+    def __init__(self, progress_id=''):
         self.__app = None
         settings = app_settings
         self.__app = configApi(**settings)
